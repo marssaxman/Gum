@@ -4,7 +4,7 @@ There are (at least) 3 methods to install Gum. But first, you must install the f
 
     apt-get install python python-gtk2 python-numpy python-setuptools \
             libsndfile1 python-dev libasound2-dev libcairo2-dev \
-            libsamplerate0 libsamplerate0-dev gcc
+            libsndfile1-dev libsamplerate0 libsamplerate0-dev gcc
 
 ## Method 1: System-wide install with pip
 
