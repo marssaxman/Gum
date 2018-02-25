@@ -7,7 +7,9 @@ fast.so: fast.c
 	gcc -shared -pthread -fPIC -fwrapv -O2 -Wall -fno-strict-aliasing \
             -I/usr/include/python2.5 -I/usr/include/python2.6 \
             -I/usr/include/python2.7 \
-            -lcairo -o fast.so fast.c
+            `pkg-config --cflags cairo` \
+            -o fast.so fast.c \
+            `pkg-config --libs cairo`
 	if [ ! -e ../fast.so ]; then ln -s fast/fast.so ../; fi
 
 fast.c: fast.pyx
