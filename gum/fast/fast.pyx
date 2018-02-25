@@ -6,6 +6,8 @@ cdef extern from "math.h":
 cdef extern from "fast.h":
     ctypedef struct PycairoContext:
       void *ctx
+
+cdef extern from "<cairo.h>":
     void cairo_move_to (void *cr, double x, double y) nogil
     void cairo_line_to (void *cr, double x, double y) nogil
     void cairo_rectangle(void *cr, double x, double ymin,
