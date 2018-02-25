@@ -31,9 +31,6 @@ def list_effects():
     l.sort()
     return l
 
-def list_extensions():
-    return sound.list_extensions()
-
 def load_all_plugins():
     plugins = glob.glob(os.path.join(PLUGINS_DIR, '*.py'))
 

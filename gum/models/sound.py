@@ -4,21 +4,17 @@
 
 from gum.lib.event import Signal
 from gum.lib import history, edit
+from gum.lib import audiofile
 import pysndfile
 from copy import copy
 import os.path
 import numpy
 
-def list_extensions():
-    extensions = pysndfile.get_sndfile_formats()
-    extensions.append('aif')
-    return extensions
-
 
 class Sound(object):
 
     # frames is a numpy.ndarray, as returned by pysndfile
-    
+
     def __init__(self, filename=None):
         self.filename = filename
         self.history = history.History()
@@ -31,11 +27,10 @@ class Sound(object):
             self._format = pysndfile.construct_format('wavex', 'pcm24')
         else:
             filename = os.path.expanduser(filename)
-            f = pysndfile.PySndfile(filename)
-            nframes = f.frames()
-            self.frames = f.read_frames(nframes)
-            self.samplerate = f.samplerate()
-            self._format = f.format()
+            file = audiofile.read(filename)
+            self.frames = file.data
+            self.samplerate = file.samplerate
+            self._format = file.format
             self._saved_revision = self.history.revision()
 
     def numchan(self):
@@ -47,12 +42,8 @@ class Sound(object):
     def save_as(self, filename):
         if filename is None:
             raise Exception("No filename")
-        f = pysndfile.PySndfile(filename,
-                                mode='w',
-                                format=self._format,
-                                channels=self.numchan(),
-                                samplerate=self.samplerate)
-        f.write_frames(self.frames)
+        file = audiofile.AudioFile(self.frames, self.samplerate, self._format)
+        audiofile.write(filename, file)
         self.filename = filename
         self._saved_revision = self.history.revision()
 
@@ -250,7 +241,6 @@ def testSound():
     assert snd2._format == pysndfile.construct_format('wavex', 'pcm24')
     assert snd.samplerate == 48000
     os.remove(outfile)
-    
 
     # test cut
     snd = Sound()

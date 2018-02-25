@@ -16,6 +16,7 @@ from gum import app
 from gum.controllers import Editor, editor
 from waveform import GraphView, GraphScrollbar
 from filedialog import OpenFileDialog, SaveFileDialog, SaveSelectionFileDialog
+from lib import audiofile
 import copy
 import os.path
 import urllib
@@ -312,15 +313,19 @@ class EditorWindow(gtk.Window):
         d.destroy()
 
     def open(self, *args):
-        dialog = OpenFileDialog(app.list_extensions(), parent=self,
-                                filename=self.notebook.filename())
+        dialog = OpenFileDialog(
+            audiofile.list_extensions(),
+            parent=self,
+            filename=self.notebook.filename())
         filenames = dialog.get_filenames()
         for filename in filenames:
             self._do_open(filename)
 
     def save_as(self, *args):
-        dialog = SaveFileDialog(app.list_extensions(), parent=self,
-                                filename=self.notebook.filename())
+        dialog = SaveFileDialog(
+            audiofile.list_extensions(),
+            parent=self,
+            filename=self.notebook.filename())
         filename = dialog.get_filename()
         saved = False
         if filename != None:
@@ -329,8 +334,10 @@ class EditorWindow(gtk.Window):
         return saved
 
     def save_selection_as(self, *args):
-        dialog = SaveSelectionFileDialog(app.list_extensions(), parent=self,
-                                         filename=self.notebook.filename())
+        dialog = SaveSelectionFileDialog(
+            audiofile.list_extensions(),
+            parent=self,
+            filename=self.notebook.filename())
         filename = dialog.get_filename()
         if filename != None:
             self.notebook.save_selection_as(filename)
