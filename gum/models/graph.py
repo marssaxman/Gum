@@ -47,8 +47,14 @@ def _condense(data, start, width, density):
             break
         mini = d.min()
         maxi = d.max()
-        res.append((mini, maxi))
+        mean, std, kurt = mini, 0, 3
+        if len(d) > 2:
+            mean = d.mean()
+            std = d.std()
+        # Computing kurtosis is too slow to be worthwhile without cython.
+        res.append((mini, maxi, mean, std, kurt))
     return res
+
 
 if HAVE_FAST:
     _condense = fast._condense
