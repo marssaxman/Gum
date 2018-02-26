@@ -175,7 +175,6 @@ class CachedLayer(Layer):
         context.set_source_surface(self._surface, 0, 0)
         context.set_operator(cairo.OPERATOR_OVER)
         context.paint()
-    
 
 class WaveformLayer(CachedLayer):
     """A layer for LayeredGraphView.
@@ -191,43 +190,49 @@ class WaveformLayer(CachedLayer):
 
     def draw_channel(self, values, context, width, height):
         context.save()
-        context.scale(1.0, 0.5)
+        # Center the horizontal axis in the viewing area, then flip it, so that
+        # positive coordinates rise above the axis and negative ones drop below.
+        height /= 2
         context.translate(0, height)
+        context.scale(1.0, -1.0)
         # Line at zero
         context.set_line_width(1)
         context.set_source_rgb(0.2, 0.2, 0.2)
         context.move_to(0, 0)
         context.line_to(width, 0)
         context.stroke()
-
-        # Waveform
+        # Draw the waveform, by connecting lines between each pair of values.
         context.set_source_rgb(*self.wavecolor)
-        for x, (mini, maxi) in enumerate(values):
-            # -1 <= mini <= maxi <= 1
-            # ystart <= ymin <= ymax <= ystart + height - 1
-            ymin = mini * height
-            ymax = maxi * height
-            if ymin == ymax:
-                # Fill one pixel 
-                context.rectangle(x, ymin, 1, 1)
-                context.fill()
-            else:
-                # Draw a line from min to max
-                context.move_to(x + 0.5, ymin)
-                context.line_to(x + 0.5, ymax)
+        density = self._graph.get_density()
+        prev = None
+        for cur in values:
+            if prev is None: prev = cur; continue
+            lmin, lmax, lmean, lstd, lkur = prev
+            rmin, rmax, rmean, rstd, rkur = cur
+            if density < 64:
+                context.move_to(0, lmean * height)
+                context.line_to(1, rmean * height)
                 context.stroke()
+            context.move_to(0, lmin * height)
+            context.line_to(0, lmax * height)
+            context.line_to(1, rmax * height)
+            context.line_to(1, rmin * height)
+            context.close_path()
+            context.fill()
+            context.translate(1, 0)
+            prev = cur
         context.restore()
 
-    if HAVE_FAST:
-        draw_channel = fast.draw_channel
+#    if HAVE_FAST:
+#        draw_channel = fast.draw_channel
 
     def draw(self, context, width, height):
         channels = self._graph.channels()
         numchan = len(channels)
         chan_height = height / numchan
         context.save()
-        for i in range(numchan):
-            self.draw_channel(channels[i], context, width, chan_height)
+        for data in channels:
+            self.draw_channel(data, context, width, chan_height)
             context.translate(0, chan_height)
         context.restore()
 

@@ -2,6 +2,7 @@
 
 cdef extern from "math.h":
     double round (double x) nogil
+    double sqrt (double x) nogil
 
 cdef extern from "fast.h":
     ctypedef struct PycairoContext:
@@ -18,12 +19,11 @@ cdef extern from "<cairo.h>":
     void cairo_set_line_width(void *cr, double w) nogil
 
 
-def draw_channel(list values,
-                 context,
-                 float width, float height):
+def draw_channel(list values, context, float width, float height):
     cdef PycairoContext *pcc
     cdef void *cr
-    cdef double mini, maxi, x, ymin, ymax
+    cdef double mini, maxi, mean, std
+    cdef double x, ymin, ymax
 
     pcc = <PycairoContext *> context
     cr = pcc.ctx
@@ -37,7 +37,7 @@ def draw_channel(list values,
 
     # Waveform
     cairo_set_source_rgb(cr, 0.0, 0.47058823529411764, 1.0)
-    for x, (mini, maxi) in enumerate(values):
+    for x, (mini, maxi, mean, std, kurt) in enumerate(values):
         with nogil:
             # -1 <= mini <= maxi <= 1
             # ystart <= ymin <= ymax <= ystart + height - 1
@@ -54,7 +54,6 @@ def draw_channel(list values,
                 cairo_stroke(cr)
 
 
-
 import numpy
 cimport numpy
 DTYPE = numpy.float64
@@ -62,31 +61,53 @@ ctypedef numpy.float64_t DTYPE_t
 
 def _condense(numpy.ndarray[DTYPE_t, ndim=1] data,
               int start, int width, float density):
-    """Returns a list of (min, max) tuples.
-
-    A density slices the data in "cells", each cell containing several
-    frames. This function returns the min and max of each visible cell.
+    """
+    Returns a list of (min, max, mean, std, kurtosis) tuples, describing each
+    cell in the view of this data which scales by the given density factor and
+    runs for 'width' slices after 'start'.
+    The statistical algorithm is based on the online_kurtosis example here:
+    https://en.wikipedia.org/wiki/Algorithms_for_calculating_variance
 
     """
     cdef Py_ssize_t i, j, a, b, l
-    cdef double mini, maxi, x
+    cdef double x, n, n1, delta, delta2, delta_n, delta_n2, M2, M3, M4
+    cdef double mini, maxi, mean, dev, kurt
     res = []
     l = len(data)
     for i in range(start, start + width):
         with nogil:
             a = <int> round(i * density)
             b = <int> round((i + 1) * density)
-            if a >= l:
-                break
-            if b > l:
-                b = l
+            if a >= l: break
+            if b > l: b = l
             mini = data[a]
             maxi = data[a]
+            mean, std, kurt = 0, 0, 3
+            n, M2, M3, M4 = 0, 0, 0, 0
             for j in range(a, b):
                 x = data[j]
                 if x > maxi:
                     maxi = x
                 if x < mini:
                     mini = x
-        res.append((mini, maxi))
+                n1 = n
+                n += 1
+                delta = x - mean
+                delta_n = delta / n
+                delta_n2 = delta_n * delta_n
+                term1 = delta * delta_n * n1
+                mean += delta_n
+                M4 += term1 * delta_n2 * (n*n - 3*n + 3)
+                M4 += 6 * delta_n2 * M2
+                M4 += -4 * delta_n * M3
+                M3 += term1 * delta_n * (n - 2)
+                M3 += -3 * delta_n * M2
+                M2 += term1
+            # if we only had one sample then it is obviously the mean
+            if n < 2: mean = mini
+            # deviation is zero if all the samples are the same sample
+            dev = sqrt(M2 / (n - 1)) if n > 1 else 0
+            # kurtosis of a normal distribution is 3 so use that as fallback
+            kurt = (n * M4) / (M2 * M2) if n > 2 else 3
+        res.append((mini, maxi, mean, dev, kurt))
     return res
