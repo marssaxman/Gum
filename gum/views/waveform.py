@@ -223,17 +223,18 @@ class WaveformLayer(CachedLayer):
             prev = cur
         context.restore()
 
-#    if HAVE_FAST:
-#        draw_channel = fast.draw_channel
+    if HAVE_FAST:
+        draw_channel = fast.draw_channel
 
     def draw(self, context, width, height):
         channels = self._graph.channels()
         numchan = len(channels)
-        chan_height = height / numchan
+        if numchan > 1:
+            height /= numchan
         context.save()
         for data in channels:
-            self.draw_channel(data, context, width, chan_height)
-            context.translate(0, chan_height)
+            self.draw_channel(data, context, width, height)
+            context.translate(0, height)
         context.restore()
 
 
