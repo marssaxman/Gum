@@ -20,7 +20,7 @@ cdef extern from "<cairo.h>":
 
 def draw_channel(list values,
                  context,
-                 float ystart, float width, float height):
+                 float width, float height):
     cdef PycairoContext *pcc
     cdef void *cr
     cdef double mini, maxi, x, ymin, ymax
@@ -31,8 +31,8 @@ def draw_channel(list values,
     # Line at zero
     cairo_set_line_width(cr, 1)
     cairo_set_source_rgb(cr, 0.2, 0.2, 0.2)
-    cairo_move_to(cr, 0, ystart + round(height / 2) + 0.5)
-    cairo_line_to(cr, width, ystart + round(height / 2) + 0.5)
+    cairo_move_to(cr, 0, round(height / 2) + 0.5)
+    cairo_line_to(cr, width, round(height / 2) + 0.5)
     cairo_stroke(cr)
 
     # Waveform
@@ -41,8 +41,8 @@ def draw_channel(list values,
         with nogil:
             # -1 <= mini <= maxi <= 1
             # ystart <= ymin <= ymax <= ystart + height - 1
-            ymin = ystart + round((-mini * 0.5 + 0.5) * (height - 1))
-            ymax = ystart + round((-maxi * 0.5 + 0.5) * (height - 1))
+            ymin = round((-mini * 0.5 + 0.5) * (height - 1))
+            ymax = round((-maxi * 0.5 + 0.5) * (height - 1))
             if ymin == ymax:
                 # Fill one pixel
                 cairo_rectangle(cr, x, ymin, 1, 1)
