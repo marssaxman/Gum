@@ -189,12 +189,15 @@ class WaveformLayer(CachedLayer):
         self.wavecolor = 0.0, 0.47058823529411764, 1.0
         graph.changed.connect(self.update)
 
-    def draw_channel(self, values, context, ystart, width, height):
+    def draw_channel(self, values, context, width, height):
+        context.save()
+        context.scale(1.0, 0.5)
+        context.translate(0, height)
         # Line at zero
         context.set_line_width(1)
         context.set_source_rgb(0.2, 0.2, 0.2)
-        context.move_to(0, ystart + round(height / 2) + 0.5)
-        context.line_to(width, ystart + round(height / 2) + 0.5)
+        context.move_to(0, 0)
+        context.line_to(width, 0)
         context.stroke()
 
         # Waveform
@@ -202,8 +205,8 @@ class WaveformLayer(CachedLayer):
         for x, (mini, maxi) in enumerate(values):
             # -1 <= mini <= maxi <= 1
             # ystart <= ymin <= ymax <= ystart + height - 1
-            ymin = ystart + round((-mini * 0.5 + 0.5) * (height - 1))
-            ymax = ystart + round((-maxi * 0.5 + 0.5) * (height - 1))
+            ymin = mini * height
+            ymax = maxi * height
             if ymin == ymax:
                 # Fill one pixel 
                 context.rectangle(x, ymin, 1, 1)
@@ -213,6 +216,7 @@ class WaveformLayer(CachedLayer):
                 context.move_to(x + 0.5, ymin)
                 context.line_to(x + 0.5, ymax)
                 context.stroke()
+        context.restore()
 
     if HAVE_FAST:
         draw_channel = fast.draw_channel
@@ -220,9 +224,12 @@ class WaveformLayer(CachedLayer):
     def draw(self, context, width, height):
         channels = self._graph.channels()
         numchan = len(channels)
+        chan_height = height / numchan
+        context.save()
         for i in range(numchan):
-            y = (height / numchan) * i
-            self.draw_channel(channels[i], context, y, width, height / numchan)
+            self.draw_channel(channels[i], context, width, chan_height)
+            context.translate(0, chan_height)
+        context.restore()
 
 
 class BackgroundLayer(Layer):
