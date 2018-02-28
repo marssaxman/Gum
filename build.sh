@@ -16,7 +16,7 @@ source venv/bin/activate
 pip install -r requirements.txt
 
 log "\n→ Building fast waveform display..."
-pushd gum/fast
+pushd gum/display
 make clean && make
 popd
 

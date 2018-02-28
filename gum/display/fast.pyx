@@ -175,7 +175,7 @@ cimport numpy
 DTYPE = numpy.float64
 ctypedef numpy.float64_t DTYPE_t
 
-def _condense(numpy.ndarray[DTYPE_t, ndim=1] data,
+def condense(numpy.ndarray[DTYPE_t, ndim=1] data,
               int start, int width, float density):
     """
     Returns a list of (min, max, mean, std, kurtosis) tuples, describing each

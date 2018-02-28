@@ -5,12 +5,7 @@
 import gtk
 import gobject
 import cairo
-try:
-    from gum import fast
-except ImportError:
-    HAVE_FAST = False
-else:
-    HAVE_FAST = True
+from gum import display
 
 # -- Base classes for drawing sound visualization.
 #
@@ -188,44 +183,6 @@ class WaveformLayer(CachedLayer):
         self.wavecolor = 0.0, 0.47058823529411764, 1.0
         graph.changed.connect(self.update)
 
-    def draw_channel(self, values, context, width, height):
-        context.save()
-        # Center the horizontal axis in the viewing area, then flip it, so that
-        # positive coordinates rise above the axis and negative ones drop below.
-        height /= 2
-        context.translate(0, height)
-        context.scale(1.0, -1.0)
-        # Line at zero
-        context.set_line_width(1)
-        context.set_source_rgb(0.2, 0.2, 0.2)
-        context.move_to(0, 0)
-        context.line_to(width, 0)
-        context.stroke()
-        # Draw the waveform, by connecting lines between each pair of values.
-        context.set_source_rgb(*self.wavecolor)
-        density = self._graph.get_density()
-        prev = None
-        for cur in values:
-            if prev is None: prev = cur; continue
-            lmin, lmax, lmean, lstd, lkur = prev
-            rmin, rmax, rmean, rstd, rkur = cur
-            if density < 64:
-                context.move_to(0, lmean * height)
-                context.line_to(1, rmean * height)
-                context.stroke()
-            context.move_to(0, lmin * height)
-            context.line_to(0, lmax * height)
-            context.line_to(1, rmax * height)
-            context.line_to(1, rmin * height)
-            context.close_path()
-            context.fill()
-            context.translate(1, 0)
-            prev = cur
-        context.restore()
-
-    if HAVE_FAST:
-        draw_channel = fast.draw_channel
-
     def draw(self, context, width, height):
         channels = self._graph.channels()
         numchan = len(channels)
@@ -233,7 +190,7 @@ class WaveformLayer(CachedLayer):
             height /= numchan
         context.save()
         for data in channels:
-            self.draw_channel(data, context, width, height)
+            display.draw_channel(data, context, width, height)
             context.translate(0, height)
         context.restore()
 
