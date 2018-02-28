@@ -10,7 +10,6 @@ cdef extern from "fast.h":
     ctypedef struct argb32:
         unsigned char a, r, g, b
 
-
 cdef extern from "<cairo.h>":
     void cairo_move_to (void *cr, double x, double y) nogil
     void cairo_line_to (void *cr, double x, double y) nogil
@@ -136,7 +135,7 @@ def draw_channel(list values, context, float fwidth, float fheight, colors):
             # peakier distribution as the numbers increase:
             # de-emphasize the edges
             kurt_scale = 1.0 / (kurt - 2.0)
-            edgecol = blend(rgb_dim, color(0,0,0), kurt_scale)
+            edgecol = rgb_dim
             meancol = rgb_fore
             stdcol = blend(rgb_main, rgb_dim, kurt_scale)
         # Draw a sequence of four gradients, from the edge to the standard
