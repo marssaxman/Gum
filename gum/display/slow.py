@@ -28,7 +28,8 @@ def condense(data, start, width, density):
         res.append(CellStats(mini, maxi, mean, std))
     return res
 
-def draw_channel(values, context, width, height):
+def draw_channel(values, context, width, height, colors):
+    gridcolor, maincolor, forecolor = colors
     context.save()
     # Center the horizontal axis in the viewing area, then flip it, so that
     # positive coordinates rise above the axis and negative ones drop below.
@@ -37,14 +38,14 @@ def draw_channel(values, context, width, height):
     context.scale(1.0, -1.0)
     # Line at zero
     context.set_line_width(1)
-    context.set_source_rgb(0.2, 0.2, 0.2)
+    context.set_source_rgb(*gridcolor)
     context.move_to(0, 0)
     context.line_to(width, 0)
     context.stroke()
     dlen = len(values)
     if dlen < 2: return
     # Draw the outline of the waveform by filling the shape between its limits.
-    context.set_source_rgb(0.0, 0.47058823529411764, 1.0)
+    context.set_source_rgb(*maincolor)
     context.move_to(0, values[0].min * height)
     for i in range(1, dlen):
         context.line_to(i, values[i].min * height - 0.5)
@@ -60,7 +61,7 @@ def draw_channel(values, context, width, height):
     context.stroke()
     # Draw again, with a lighter color, filling in the area around the mean
     # for the width of the standard deviation.
-    context.set_source_rgb(0.5, 0.737254902, 1.0)
+    context.set_source_rgb(*forecolor)
     context.move_to(0, (values[0].mean - values[0].std) * height)
     for i in range(1, dlen):
         context.line_to(i, (values[i].mean - values[i].std) * height)

@@ -5,6 +5,7 @@
 import gtk
 import gobject
 import cairo
+import colorsys
 from gum import display
 
 # -- Base classes for drawing sound visualization.
@@ -180,7 +181,11 @@ class WaveformLayer(CachedLayer):
     def __init__(self, layered, graph):
         CachedLayer.__init__(self, layered)
         self._graph = graph
-        self.wavecolor = 0.0, 0.47058823529411764, 1.0
+        hue = 212.0 / 365.0
+        gridcolor = (0.2, 0.2, 0.2)
+        maincolor = colorsys.hls_to_rgb(hue, 0.5, 1.0)
+        forecolor = colorsys.hls_to_rgb(hue, 0.75, 1.0)
+        self._colors = (gridcolor, maincolor, forecolor)
         graph.changed.connect(self.update)
 
     def draw(self, context, width, height):
@@ -190,7 +195,7 @@ class WaveformLayer(CachedLayer):
             height /= numchan
         context.save()
         for data in channels:
-            display.draw_channel(data, context, width, height)
+            display.draw_channel(data, context, width, height, self._colors)
             context.translate(0, height)
         context.restore()
 
