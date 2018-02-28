@@ -3,13 +3,7 @@
 # Licensed under the Revised BSD License.
 
 from gum.lib.event import Signal
-try:
-    from gum import fast
-except ImportError:
-    HAVE_FAST = False
-    print "Warning: 'fast' module not found. You won't have fast display!"
-else:
-    HAVE_FAST = True
+from gum import display
 
 def frame2cell(frame, density):
     return frame / float(density)
@@ -25,39 +19,9 @@ def _overview(data, start, width, density):
         channels = data.transpose()
     o = []
     for chan in channels:
-        values = _condense(chan, start, width, density)
+        values = display.condense(chan, start, width, density)
         o.append(values)
     return o
-
-def _condense(data, start, width, density):
-    """Returns a list of (min, max) tuples.
-
-    A density slices the data in "cells", each cell containing several
-    frames. This function returns the min and max of each visible cell.
-
-    """
-    res = []
-    start = int(start)
-    width = int(width)
-    for i in range(start, start + width):
-        a = int(round(cell2frame(i, density)))
-        b = int(round(cell2frame(i + 1, density)))
-        d = data[a:b]
-        if len(d) == 0:
-            break
-        mini = d.min()
-        maxi = d.max()
-        mean, std, kurt = mini, 0, 3
-        if len(d) > 2:
-            mean = d.mean()
-            std = d.std()
-        # Computing kurtosis is too slow to be worthwhile without cython.
-        res.append((mini, maxi, mean, std, kurt))
-    return res
-
-
-if HAVE_FAST:
-    _condense = fast._condense
 
 
 def intersection((a, b), (x, y)):
@@ -292,8 +256,8 @@ def test_overview():
     import numpy
     l = 1000000
     b = numpy.array(range(l), DTYPE)
-    assert len(_condense(b, 0, l, l/10)) == 10
-    assert len(_condense(b, 0, l, l/100)) == 100
+    assert len(display.condense(b, 0, l, l/10)) == 10
+    assert len(display.condense(b, 0, l, l/100)) == 100
 
 def test_middle():
     from gum.lib.mock import Mock, Fake

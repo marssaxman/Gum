@@ -10,7 +10,6 @@ fast.so: fast.c
             `pkg-config --cflags cairo` \
             -o fast.so fast.c \
             `pkg-config --libs cairo`
-	if [ ! -e ../fast.so ]; then ln -s fast/fast.so ../; fi
 
 fast.c: fast.pyx
 	$(CYTHON) fast.pyx
