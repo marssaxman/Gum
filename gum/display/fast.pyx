@@ -70,9 +70,24 @@ cdef argb32 *vlerp(argb32 *buf, int stride, argb32 a, argb32 b, int rows):
         rows -= 1
     return buf
 
+def draw_channel(list values, context, float fwidth, float fheight, colors):
+    cdef PycairoContext *pcc
+    cdef void *cr
 
-cdef plot_heatmap(list values, void *cr, float fwidth, float fheight):
-    # Let's try something completely bonkers
+    pcc = <PycairoContext *> context
+    cr = pcc.ctx
+
+    gridcolor, maincolor, forecolor = colors
+
+    # Line at zero
+    cairo_set_line_width(cr, 1)
+    cairo_set_source_rgb(cr, gridcolor[0], gridcolor[1], gridcolor[2])
+    cairo_move_to(cr, 0, round(height / 2) + 0.5)
+    cairo_line_to(cr, width, round(height / 2) + 0.5)
+    cairo_stroke(cr)
+
+    # Let's try something completely bonkers: render a pixmap and blit,
+    # oldschool 2D graphics style.
     cdef cairo_surface_t *surface
     surface = cairo_image_surface_create(0, <int> fwidth, <int> fheight)
     cairo_surface_flush(surface)
@@ -85,14 +100,25 @@ cdef plot_heatmap(list values, void *cr, float fwidth, float fheight):
 
     cdef float vscale
     vscale = (<float>(height-1)) / 2.0
-    # let's make a color palette for this crazy thing
-    cdef argb32 rgb_wave, rgb_dim, rgb_bright
-    rgb_dim = color(64, 64, 64)
-    rgb_wave = color(0, 120, 255)
-    rgb_bright = color(127, 188, 255)
+    # Convert the input colors from floats into 8-bit integers.
+    cdef argb32 rgb_main, rgb_dim, rgb_fore
+    # The "dim" color is fully transparent.
+    rgb_dim = color(0,0,0)
+    rgb_dim.a = 0
+    rgb_main = color(maincolor[0]*255, maincolor[1]*255, maincolor[2]*255)
+    rgb_fore = color(forecolor[0]*255, forecolor[1]*255, forecolor[1]*255)
+
+    # Draw a line along the mean. This is a fallback for low density levels to
+    # ensure that something always gets drawn.
+    cairo_set_source_rgb(cr, maincolor[0], maincolor[1], maincolor[2])
+    cairo_move_to(cr, 0, -values[0][2] * vscale + vscale)
+    for i in range(1, len(values)):
+        cairo_line_to(cr, i, -values[i][2] * vscale + vscale)
+    cairo_stroke(cr)
 
     y = 0
     stride /= 4 # sizeof rgba32
+    cdef int ymax, ymin, ymean, topdev, botdev
     cdef double mini, maxi, mean, std, kurt
     cdef argb32 edgecol, meancol, stdcol
     cdef double kurt_scale
@@ -103,22 +129,24 @@ cdef plot_heatmap(list values, void *cr, float fwidth, float fheight):
             # flatter distribution as the numbers decrease:
             # de-emphasize the mean
             kurt_scale = kurt / 3.0
-            meancol = blend(rgb_bright, rgb_wave, kurt_scale)
+            meancol = blend(rgb_fore, rgb_main, kurt_scale)
             edgecol = rgb_dim
-            stdcol = blend(meancol, rgb_wave, kurt_scale)
+            stdcol = blend(meancol, rgb_main, kurt_scale)
         else:
             # peakier distribution as the numbers increase:
             # de-emphasize the edges
             kurt_scale = 1.0 / (kurt - 2.0)
             edgecol = blend(rgb_dim, color(0,0,0), kurt_scale)
-            meancol = rgb_bright
-            stdcol = blend(rgb_wave, rgb_dim, kurt_scale)
-
-        ymin = <int> ((1 - mini) * vscale)
-        ymax = <int> ((1 - maxi) * vscale)
+            meancol = rgb_fore
+            stdcol = blend(rgb_main, rgb_dim, kurt_scale)
+        # Draw a sequence of four gradients, from the edge to the standard
+        # deviation mark, to the mean, to the other edge of the std dev, then
+        # down to the far limit.
+        ymin = <int> round((1 - mini) * vscale)
+        ymax = <int> round((1 - maxi) * vscale)
         ymean = <int> ((1 - mean) * vscale)
-        topdev = ymean - (std * vscale)
-        botdev = ymean + (std * vscale)
+        topdev = <int> (ymean - (std * vscale))
+        botdev = <int> (ymean + (std * vscale))
 
         pixaddr = &buffer[ymax*stride + x]
         pixaddr = vlerp(pixaddr, stride, edgecol, stdcol, topdev-ymax)
@@ -130,44 +158,6 @@ cdef plot_heatmap(list values, void *cr, float fwidth, float fheight):
     cairo_set_source_surface(cr, surface, 0, 0)
     cairo_paint(cr)
     cairo_surface_destroy(surface)
-
-
-def draw_channel(list values, context, float width, float height):
-    cdef PycairoContext *pcc
-    cdef void *cr
-    cdef double mini, maxi, mean, std, kurt
-    cdef double x, ymin, ymax
-
-    pcc = <PycairoContext *> context
-    cr = pcc.ctx
-
-    # Line at zero
-    cairo_set_line_width(cr, 1)
-    cairo_set_source_rgb(cr, 0.2, 0.2, 0.2)
-    cairo_move_to(cr, 0, round(height / 2) + 0.5)
-    cairo_line_to(cr, width, round(height / 2) + 0.5)
-    cairo_stroke(cr)
-
-    plot_heatmap(values, cr, width, height)
-    return
-
-    # Waveform
-    cairo_set_source_rgb(cr, 0.0, 0.47058823529411764, 1.0)
-    for x, (mini, maxi, mean, std, kurt) in enumerate(values):
-        with nogil:
-            # -1 <= mini <= maxi <= 1
-            # ystart <= ymin <= ymax <= ystart + height - 1
-            ymin = round((-mini * 0.5 + 0.5) * (height - 1))
-            ymax = round((-maxi * 0.5 + 0.5) * (height - 1))
-            if ymin == ymax:
-                # Fill one pixel
-                cairo_rectangle(cr, x, ymin, 1, 1)
-                cairo_fill(cr)
-            else:
-                # Draw a line from min to max
-                cairo_move_to(cr, x + 0.5, ymin)
-                cairo_line_to(cr, x + 0.5, ymax)
-                cairo_stroke(cr)
 
 
 import numpy
