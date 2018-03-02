@@ -85,6 +85,9 @@ def draw_channel(list values, context, float fwidth, float fheight, colors):
     cairo_line_to(cr, width, round(height / 2) + 0.5)
     cairo_stroke(cr)
 
+    if len(values) < 2:
+        return
+
     # Let's try something completely bonkers: render a pixmap and blit,
     # oldschool 2D graphics style.
     cdef cairo_surface_t *surface
