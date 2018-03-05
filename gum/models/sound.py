@@ -5,7 +5,7 @@
 from gum.lib.event import Signal
 from gum.lib import history, edit
 from gum.lib import audiofile
-from gum.analysis import analysis
+import gum.analysis as analysis
 import pysndfile
 from copy import copy
 import os.path
@@ -33,7 +33,7 @@ class Sound(object):
             self.samplerate = file.samplerate
             self._format = file.format
             self._saved_revision = self.history.revision()
-        analysis.apply(self)
+        analysis.evaluate(self)
 
     def numchan(self):
         return self.frames.ndim
@@ -56,7 +56,7 @@ class Sound(object):
         self.history.add(do, undo)
         self.changed()
         return clip
-    
+
     def _do_cut(self, start, end):
         data = numpy.concatenate((self.frames[:start], self.frames[end:]))
         self.frames = data

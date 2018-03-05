@@ -194,8 +194,8 @@ class WaveformLayer(CachedLayer):
         start, end = self._graph.view()
         density = self._graph.get_density()
         sound = self._graph._sound
-        if sound._onsets is not None: #and density >= 8192:
-            onsets = sound._onsets
+        if 'onsets' in sound.features:
+            onsets = sound.features['onsets']
             # Onsets is an array of timestamps, in seconds, locating each
             # note onset we detected during initial analysis. Everything else
             # in this system uses indexes, but I think seconds make more sense
