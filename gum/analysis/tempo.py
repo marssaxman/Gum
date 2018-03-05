@@ -1,3 +1,24 @@
+"""
+Tempo detection: statistical correlation of note onsets.
+
+We are looking for the most prominent repetitive timing interval in a piece of
+music: the pace that human listeners would think of as the "beat". This is of
+general interest to users of the software, but it will also provide a useful
+foundation for other stages of music structure analysis.
+
+Our algorithm is based on autocorrelation. We generate a coarse onset envelope
+by computing a power spectrogram over non-overlapping frames, then taking the
+positive differences between frames, for half-wave-rectified spectral flux.
+
+We step through the resulting array of onset values, frame by frame, using an
+8-second window in order to capture multiple beat features no matter the tempo.
+For each window, we compute the autocorrelation and sum it into a running
+histogram. Finally, we construct a probability vector based on the assumption
+that tempos follow a log-normal distribution centered on 120 BPM; after masking
+the histogram with the tempo probability, the highest remaining value is the
+most likely tempo, and we return the corresponding BPM value.
+"""
+
 import numpy as np
 
 
