@@ -193,12 +193,18 @@ class WaveformLayer(CachedLayer):
         # HACK HACK HACK
         start, end = self._graph.view()
         density = self._graph.get_density()
-        onset_width = 128 # assumption about the implementation
-        onset_alpha = 0.25 / (max(density, onset_width) / onset_width) ** 2
-        onsets = self._graph._sound._onsets
-        if onsets is not None and int(onset_alpha * 256) > 0:
+        sound = self._graph._sound
+        if sound._onsets is not None: #and density >= 8192:
+            onsets = sound._onsets
+            # Onsets is an array of timestamps, in seconds, locating each
+            # note onset we detected during initial analysis. Everything else
+            # in this system uses indexes, but I think seconds make more sense
+            # in the long run...
+            onset_width = 128 # assumption about the implementation
+            onset_alpha = 0.25 / (max(density, onset_width) / onset_width) ** 2
             context.set_source_rgba(1, 1, 1, onset_alpha)
-            for t in onsets:
+            for tsec in onsets:
+                t = int(tsec * sound.samplerate)
                 if t >= start and t < end:
                     x = int((t - start) / density)
                     fw = max(1, int((t + onset_width - start) / density) - x)

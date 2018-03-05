@@ -114,7 +114,7 @@ def _moving_maximum(array, width):
     return maxes
 
 
-def _detect(samples, samplerate):
+def strength(samples, samplerate):
     """
     Find onset points by measuring spectral flux and looking for peaks.
     Returns an array of sample index numbers.
@@ -144,16 +144,19 @@ def _detect(samples, samplerate):
     if len(flux):
         flux -= flux.min()
         flux /= flux.max()
+    return flux, float(samplerate) / STEP_SIZE
 
+
+def events(flux, framerate):
     # Compute the moving average flux value preceding each frame. This sets the
     # threshold for peak prominence. We would normally expect to find a peak no
     # less frequently than 8 Hz, which would be once per beat at 120 BPM, so
     # we'll use a window long enough to include the previous onset peak.
-    average = _moving_average(flux, int(samplerate / STEP_SIZE / 8 * 1.1))
+    average = _moving_average(flux, int(framerate / 8 * 1.1))
     # For each frame, compute the maximum flux value across a 50 ms window,
     # which corresponds to the threshold of interval perception. This will be
     # used as a mask to quickly filter for local maxima. 
-    maximum = _moving_maximum(flux, int(samplerate / STEP_SIZE * 0.025))
+    maximum = _moving_maximum(flux, int(framerate * 0.025))
 
     # Events occur at points where the signal is both equal to the local max
     # and significantly greater than the local average.
@@ -161,15 +164,12 @@ def _detect(samples, samplerate):
     onset = flux * (flux == maximum) * (flux >= threshold)
 
     # Find the frames which still have nonzero values, get their indexes, and
-    # convert flux-frame indexes back to sample indexes.
-    events = np.nonzero(onset)[0] * STEP_SIZE
+    # convert flux-frame indexes to event times in seconds.
+    events = np.unique(np.nonzero(onset)[0])
+    return events.astype(np.float) / framerate
 
-    return np.unique(events)
 
-
-def detect(sound):
-    samples = sound.frames
-    if samples.ndim > 1:
-        samples = np.mean(samples, axis=1)
-    return _detect(samples, sound.samplerate)
+def detect(samples, samplerate):
+    envelope, framerate = strength(samples, samplerate)
+    return events(envelope, framerate)
 
