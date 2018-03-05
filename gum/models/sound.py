@@ -10,12 +10,23 @@ import pysndfile
 from copy import copy
 import os.path
 import numpy
+import gobject, threading
+
+
+class _Features:
+    def __init__(self, signal):
+        self.features = dict()
+        self.changed = signal
+    def __setitem__(self, key, value):
+        self.features[key] = value
+        gobject.idle_add(lambda x: x(), self.changed)
+    def __getitem__(self, key):
+        return self.features[key]
+    def __contains__(self, key):
+        return key in self.features
 
 
 class Sound(object):
-
-    # frames is a numpy.ndarray, as returned by pysndfile
-
     def __init__(self, filename=None):
         self.filename = filename
         self.history = history.History()
@@ -33,7 +44,15 @@ class Sound(object):
             self.samplerate = file.samplerate
             self._format = file.format
             self._saved_revision = self.history.revision()
-        analysis.evaluate(self)
+        self.features = _Features(self.changed)
+        self.analyze()
+
+    def analyze(self):
+        def threadfunc():
+            analysis.extract(self.frames, self.samplerate, self.features)
+        thread = threading.Thread(target=threadfunc)
+        thread.daemon = True
+        thread.start()
 
     def numchan(self):
         return self.frames.ndim
