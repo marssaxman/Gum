@@ -7,6 +7,7 @@ import gobject
 import cairo
 import colorsys
 from gum import display
+import numpy as np
 
 # -- Base classes for drawing sound visualization.
 #
@@ -189,6 +190,21 @@ class WaveformLayer(CachedLayer):
         graph.changed.connect(self.update)
 
     def draw(self, context, width, height):
+        # HACK HACK HACK
+        start, end = self._graph.view()
+        density = self._graph.get_density()
+        onset_width = 128 # assumption about the implementation
+        onset_alpha = 0.25 / (max(density, onset_width) / onset_width) ** 2
+        onsets = self._graph._sound._onsets
+        if onsets is not None and int(onset_alpha * 256) > 0:
+            context.set_source_rgba(1, 1, 1, onset_alpha)
+            for t in onsets:
+                if t >= start and t < end:
+                    x = int((t - start) / density)
+                    fw = max(1, int((t + onset_width - start) / density) - x)
+                    context.rectangle(x, 0, fw, height)
+                    context.fill()
+
         channels = self._graph.channels()
         numchan = len(channels)
         if numchan > 1:
