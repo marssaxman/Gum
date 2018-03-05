@@ -78,3 +78,14 @@ def detect(samples, samplerate):
     # the best remaining candidate. The corresponding BPM value is our result.
     return bpms[np.argmax(tempogram * weight)]
 
+
+def estimate(samples, samplerate):
+    # Make a quick estimate of the track tempo by measuring BPM in a small
+    # section. We assume that tempo is usually more or less constant, and that
+    # most tracks are likely to have some highly-tempo-synchronized section
+    # happening around the 3/4 mark (as opposed to a bridge or breakdown); we
+    # will therefore measure a 30 second window around that position.
+    start = max(0, (len(samples) * 3 / 4) - samplerate * 15)
+    stop = min(len(samples), start + samplerate * 30)
+    return detect(samples[start:stop], samplerate)
+
