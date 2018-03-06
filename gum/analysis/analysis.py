@@ -1,5 +1,5 @@
 import numpy as np
-import onsets, tempo
+import onset, tempo
 from time import time
 
 
@@ -29,7 +29,7 @@ def extract(samples, samplerate, features):
         features['tempo'] = bpm
         print "tempo estimate = %.2f" % bpm
     with _logtime("detect onset events"):
-        features['onsets'] = onsets.detect(samples, samplerate)
+        features['onsets'] = onset.detect(samples, samplerate)
     with _logtime("measure tempo"):
         bpm = tempo.detect(samples, samplerate)
         features['tempo'] = bpm
