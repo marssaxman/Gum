@@ -71,6 +71,8 @@ import numpy as np
 
 
 def _windows(source, window_size=WINDOW_SIZE, step_size=STEP_SIZE):
+    if len(source) <= 0:
+        return
     # Yield a sequence of views onto the source. We assume that the window
     # size is an even multiple of the step size.
     # The first frame will be centered on index zero. We will pad to the left
