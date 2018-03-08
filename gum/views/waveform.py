@@ -189,27 +189,29 @@ class WaveformLayer(CachedLayer):
         self._colors = (gridcolor, maincolor, forecolor)
         graph.changed.connect(self.update)
 
-    def draw(self, context, width, height):
+    def draw_events(self, times, context, width, height):
         # HACK HACK HACK
+        sound = self._graph._sound
         start, end = self._graph.view()
         density = self._graph.get_density()
+        event_density = float(len(sound.frames)) / len(times)
+        event_width = int(event_density / 8)
+        alpha = 0.25 / (max(density, event_width) / event_width) ** 2
+        context.set_source_rgba(1, 1, 1, alpha)
+        for tsec in times:
+            tidx = int(tsec * sound.samplerate)
+            if tidx >= start and tidx < end:
+                tidx -= start
+                x = int(tidx / density)
+                fw = max(1, int((tidx + event_width) / density) - x)
+                context.rectangle(x, 0, fw, height)
+                context.fill()
+
+    def draw(self, context, width, height):
+        # Awful hack
         sound = self._graph._sound
-        if 'onsets' in sound.features:
-            onsets = sound.features['onsets']
-            # Onsets is an array of timestamps, in seconds, locating each
-            # note onset we detected during initial analysis. Everything else
-            # in this system uses indexes, but I think seconds make more sense
-            # in the long run...
-            onset_width = 128 # assumption about the implementation
-            onset_alpha = 0.25 / (max(density, onset_width) / onset_width) ** 2
-            context.set_source_rgba(1, 1, 1, onset_alpha)
-            for tsec in onsets:
-                t = int(tsec * sound.samplerate)
-                if t >= start and t < end:
-                    x = int((t - start) / density)
-                    fw = max(1, int((t + onset_width - start) / density) - x)
-                    context.rectangle(x, 0, fw, height)
-                    context.fill()
+        if 'beats' in sound.features:
+            self.draw_events(sound.features['beats'], context, width, height)
 
         channels = self._graph.channels()
         numchan = len(channels)
