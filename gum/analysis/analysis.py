@@ -24,6 +24,22 @@ def extract(samples, samplerate, features):
     if samples.ndim > 1:
         with _logtime("mixdown to mono"):
             samples = np.mean(samples, axis=1)
+    if samplerate > 22050:
+        # Downsampling 2x saves an amazing amount of time and improves tracking
+        # accuracy ivery substantially
+        with _logtime("downsample to 22050 Hz"):
+            nu = np.empty(int(len(samples) / 2), dtype=np.float)
+            if len(samples) % 2:
+                nu[:] = samples[:-1:2] * 0.5
+                nu[:] = samples[1::2] * 0.25
+                nu[1:] = samples[:-3:2] * 0.25
+            else:
+                nu[:] = samples[::2] * 0.5
+                nu[:] = samples[1::2] * 0.25
+                nu[1:] = samples[:-2:2] * 0.25
+            samples = nu
+            samplerate = int(samplerate / 2)
+
     with _logtime("quick tempo estimate"):
         bpm = tempo.estimate(samples, samplerate)
         features['tempo'] = bpm
