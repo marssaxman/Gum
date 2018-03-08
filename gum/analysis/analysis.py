@@ -26,7 +26,7 @@ def extract(samples, samplerate, features):
             samples = np.mean(samples, axis=1)
     if samplerate > 22050:
         # Downsampling 2x saves an amazing amount of time and improves tracking
-        # accuracy ivery substantially
+        # accuracy very substantially
         with _logtime("downsample to 22050 Hz"):
             nu = np.empty(int(len(samples) / 2), dtype=np.float)
             if len(samples) % 2:
@@ -39,21 +39,25 @@ def extract(samples, samplerate, features):
                 nu[1:] = samples[:-2:2] * 0.25
             samples = nu
             samplerate = int(samplerate / 2)
-
-    with _logtime("quick tempo estimate"):
-        bpm = tempo.estimate(samples, samplerate)
-        features['tempo'] = bpm
-        print "tempo estimate = %.2f" % bpm
     with _logtime("measure onset envelope"):
         onset_strength, onset_fps = onset.strength(samples, samplerate)
     with _logtime("detect onset events"):
         features['onsets'] = onset.events(onset_strength, onset_fps)
     with _logtime("measure tempo"):
-        new_bpm = tempo.detect(samples, samplerate)
-        bpm_diff = bpm - new_bpm
-        bpm = new_bpm
+        bpm = tempo.detect(samples, samplerate)
         features['tempo'] = bpm
-        print "tempo = %.2f (estimate was off by %.2f)" % (bpm, bpm_diff)
+        print "tempo = %.2f bpm" % bpm
     with _logtime("track beats"):
-        features['beats'] = beat.track_onset(onset_strength, onset_fps, bpm)
+        # Track strongest beat alignments in the onset envelope.
+        beats = beat.track_onset(onset_strength, onset_fps, bpm)
+        # Adjust precise time points according to local energy peaks.
+        beats = beat.align_energy(beats, onset_fps, samples, samplerate)
+        features['beats'] = beats
+        # Compute the average BPM based on inter-onset intervals. How far off
+        # was our autocorrelation-based estimate?
+        ioi = beats[1:] - beats[:-1]
+        ioi_avg = ioi.mean()
+        ioi_bpm = 60.0 / ioi_avg
+        bpm_diff = bpm - ioi_bpm
+        print "post-tracking BPM: %.2f (estimate was off by %.2f)" % (ioi_bpm, bpm_diff)
 

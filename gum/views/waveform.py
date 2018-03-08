@@ -193,26 +193,34 @@ class WaveformLayer(CachedLayer):
         # HACK HACK HACK
         sound = self._graph._sound
         start, end = self._graph.view()
-        density = self._graph.get_density()
-        event_density = float(len(sound.frames)) / len(times)
-        event_width = int(event_density / 8)
-        alpha = 0.25 / (max(density, event_width) / event_width) ** 2
+        view_density = self._graph.get_density()
+        if len(times) < 1:
+            print "WTF! no entries in timestamp list"
+            return
+        # we'd like the event lines to become invisible by the time there would
+        # be one per pixel, and we'd like them to be fully visible when there
+        # are at least 48 pixels separating them.
+        event_spacing = (float(len(sound.frames)) / len(times)) / view_density
+        event_density = 48.0 / event_spacing
+        alpha = min(1.0, (1.0 / event_density) ** 2)
+        if alpha * 256 <= 1:
+            return
         context.set_source_rgba(1, 1, 1, alpha)
+        start_time = float(start) / sound.samplerate
+        end_time = float(end) / sound.samplerate
         for tsec in times:
-            tidx = int(tsec * sound.samplerate)
-            if tidx >= start and tidx < end:
-                tidx -= start
-                x = int(tidx / density)
-                fw = max(1, int((tidx + event_width) / density) - x)
-                context.rectangle(x, 0, fw, height)
-                context.fill()
+            if tsec >= start_time and tsec <= end_time:
+                tidx = int(tsec * sound.samplerate)
+                x = int((tidx - start) / view_density) + 0.5
+                context.move_to(x, 0)
+                context.line_to(x, height)
+                context.stroke()
 
     def draw(self, context, width, height):
         # Awful hack
         sound = self._graph._sound
         if 'beats' in sound.features:
             self.draw_events(sound.features['beats'], context, width, height)
-
         channels = self._graph.channels()
         numchan = len(channels)
         if numchan > 1:

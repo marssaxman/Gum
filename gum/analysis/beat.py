@@ -20,16 +20,13 @@ def track_onset(envelope, framerate, bpm):
 
     # Reduce local fluctuations, smoothing the envelope with a Gaussian window
     # spanning 1/32 of the estimated beat interval.
-    window = np.exp(-0.5 * (np.arange(-period, period+1)*32.0/period)**2)
-    #window = np.exp(-0.5 * np.linspace(-32.0, 32.0, period*2+1) ** 2)
+    window = np.exp(-0.5 * np.linspace(-32.0, 32.0, period*2+1) ** 2)
     localscore = np.convolve(envelope, window, 'same')
 
     # Use a log-gaussian cost function for distance from expected bpm.
     tightness = 100
     window = np.arange(-2 * period, -np.round(period / 2) + 1, dtype=np.int)
     txwt = -tightness * (np.log(-window / period) ** 2)
-    # Are we on the first beat?
-    #!!! the Ellis paper starts with backlinks at -1, not 0?
     backlink = np.zeros_like(localscore, dtype=np.int)
     cumscore = np.zeros_like(localscore)
     first_beat = True
@@ -74,5 +71,23 @@ def track_onset(envelope, framerate, bpm):
     beats = beats[valid.min():valid.max()]
 
     # Convert the beat frame indexes into timestamps.
-    return (beats.astype(np.float) - 1) / framerate
+    return (beats.astype(np.float)) / framerate
 
+
+def align_energy(beats, framerate, signal, samplerate):
+    # Given an array of beat times, and the frame rate used to compute them,
+    # fine-tune the beat position by aligning it with the nearest energy peak.
+    # This is a noticeable improvement in the common case that the beats are
+    # aligned with percussive events, and doesn't change beat positions enough
+    # to notice otherwise.
+    window_size = 2 * int(samplerate / framerate)
+    mask = np.kaiser(window_size * 2, 1)
+    out = np.empty_like(beats)
+    for i, t in enumerate(beats):
+        idx = int(t * samplerate)
+        start, stop = idx - window_size, idx + window_size
+        if start < window_size or stop + window_size >= len(signal):
+            continue
+        new_t = np.square(signal[start:stop] * mask).argmax() + start
+        out[i] = float(new_t) / samplerate
+    return out
