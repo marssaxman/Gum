@@ -1,14 +1,17 @@
 import numpy as np
+from samplerate import resample
 import onset, tempo, beat
 from time import time
 
 
 class _logtime:
     """Context manager which prints out the elapsed time."""
+    indent = ""
     def __init__(self, msg):
         self.msg = msg
     def __enter__(self):
-        print "beginning %s..." % self.msg
+        _logtime.indent += "-"
+        print "%s>logtime(%s) enter..." % (_logtime.indent, self.msg)
         self.start = time()
     def __exit__(self, type, value, traceback):
         duration = time() - self.start
@@ -16,29 +19,39 @@ class _logtime:
         if duration < 1.0:
             duration *= 1000.0
             unit = "ms"
-        print "...%s duration: %.2f %s" % (self.msg, duration, unit)
+        print "<%slogtime(%s) exit: %.2f %s" % (
+            _logtime.indent, self.msg, duration, unit
+        )
+        _logtime.indent = self.indent[:-1]
 
 
+def _timefunc(f):
+    def wrap(*args, **kwargs):
+        with _logtime(f.__name__):
+            return f(*args, **kwargs)
+    return wrap
+
+
+@_timefunc
+def _normalize(signal, rate):
+    # Mix to a single channel, since we only care about time intervals
+    # which need to be the same regardless of stereo effects.
+    if hasattr(signal, 'ndim') and signal.ndim > 1:
+        with _logtime("mixdown to mono"):
+            signal = signal.mean(axis=1).astype(np.float)
+    if rate > 22050:
+        # Downsampling 2x saves an amazing amount of time and improves tracking
+        # accuracy very substantially. Fixing rate at 22k also lets us make
+        # reasonable assumptions about FFT size.
+        with _logtime("downsample to 22050 Hz"):
+            signal = resample(signal, 22050.0 / rate, 'sinc_fastest')
+    return np.asarray(signal, dtype=np.float), 22050
+
+
+@_timefunc
 def extract(samples, samplerate, features):
     # Generate audio features and add them to the features dictionary.
-    if samples.ndim > 1:
-        with _logtime("mixdown to mono"):
-            samples = np.mean(samples, axis=1)
-    if samplerate > 22050:
-        # Downsampling 2x saves an amazing amount of time and improves tracking
-        # accuracy very substantially
-        with _logtime("downsample to 22050 Hz"):
-            nu = np.empty(int(len(samples) / 2), dtype=np.float)
-            if len(samples) % 2:
-                nu[:] = samples[:-1:2] * 0.5
-                nu[:] = samples[1::2] * 0.25
-                nu[1:] = samples[:-3:2] * 0.25
-            else:
-                nu[:] = samples[::2] * 0.5
-                nu[:] = samples[1::2] * 0.25
-                nu[1:] = samples[:-2:2] * 0.25
-            samples = nu
-            samplerate = int(samplerate / 2)
+    samples, samplerate = _normalize(samples, samplerate)
     with _logtime("measure onset envelope"):
         onset_strength, onset_fps = onset.strength(samples, samplerate)
     with _logtime("detect onset events"):
