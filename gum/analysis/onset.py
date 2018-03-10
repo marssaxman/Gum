@@ -68,30 +68,8 @@ one standard deviation higher than the mean. If such a flux peak is also the
 maximum value within 8 frames in either direction, we will call it an onset.
 """
 import numpy as np
+import spectrogram
 
-
-def _windows(source, window_size=WINDOW_SIZE, step_size=STEP_SIZE):
-    if len(source) <= 0:
-        return
-    # Yield a sequence of views onto the source. We assume that the window
-    # size is an even multiple of the step size.
-    # The first frame will be centered on index zero. We will pad to the left
-    # with zeros until the left edge of the window reaches the sample data.
-    for stop in range(window_size / 2, window_size, step_size):
-        frame = np.zeros(window_size)
-        frame[window_size - stop:] = source[:stop]
-        yield frame
-    # Most frames will simply be non-copied views on the source array.
-    for start in range(0, len(source)-window_size, step_size):
-        stop = start + window_size
-        yield source[start:stop]
-    # Trailing frames will be padded to the right with zeros, until the
-    # center of the frame has reached or passed the end of the array.
-    remaining = window_size - step_size + (len(source) % step_size)
-    for offset in range(-remaining, -window_size / 2, step_size):
-        frame = np.zeros(window_size)
-        frame[:-offset] = source[offset:]
-        yield frame
 
 
 def _moving_average(array, width):
@@ -125,17 +103,19 @@ def strength(samples, samplerate):
     # The rfft variant truncates the symmetric terms for us.
     # Use a hamming function to balance the weights of samples between pairs
     # of half-overlapped FFT frames.
-    mask = np.hamming(WINDOW_SIZE)
-    spectrogram = (np.abs(np.fft.rfft(f * mask)) for f in _windows(samples))
+    s = spectrogram.magnitude(samples, size=WINDOW_SIZE, step=STEP_SIZE)
 
     # Compute the spectral flux by subtracting paired spectrum values, then
     # discarding negatives; we only care about flux increases.
+
     def _flux():
-        empty = np.zeros(WINDOW_SIZE / 2 + 1)
+        num_bins = int(WINDOW_SIZE / 2) + 1
+        empty = np.zeros(num_bins)
         prev = [empty] * (OVERLAP_FACTOR - 1)
-        for s in spectrogram:
-            yield np.maximum(s - prev.pop(0), 0)
-            prev.append(s)
+        for frame in s:
+            frame = frame[:num_bins]
+            yield np.maximum(frame - prev.pop(0), 0)
+            prev.append(frame)
         while prev:
             prev.pop()
             yield empty
