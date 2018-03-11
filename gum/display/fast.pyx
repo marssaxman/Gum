@@ -69,6 +69,25 @@ cdef argb32 *vlerp(argb32 *buf, int stride, argb32 a, argb32 b, int rows):
         rows -= 1
     return buf
 
+
+cdef argb32 *vfade(
+        argb32 *buf, int stride, argb32 a, argb32 b, int rows, float power):
+    if rows == 0:
+        return buf
+    if rows == 1:
+        buf[0] = blend(a, b, 0.5 ** power)
+        return buf + stride
+    cdef float step, factor
+    step = 1.0 / (<float>rows)
+    factor = 1.0
+    while rows > 0:
+        buf[0] = blend(a, b, factor ** power)
+        buf += stride
+        factor -= step
+        rows -= 1
+    return buf
+
+
 def draw_channel(list values, context, float fwidth, float fheight, colors):
     cdef PycairoContext *pcc
     cdef void *cr
@@ -121,41 +140,52 @@ def draw_channel(list values, context, float fwidth, float fheight, colors):
     y = 0
     stride /= 4 # sizeof rgba32
     cdef int ymax, ymin, ymean, topdev, botdev
-    cdef double mini, maxi, mean, std, kurt
+    cdef double mini, maxi, mean, dev
     cdef argb32 edgecol, meancol, stdcol
-    cdef double kurt_scale
+    cdef double crest_scale
     x = 0
-    for mini, maxi, mean, std, kurt in values:
-        # the kurtosis controls the slope of the color gradient
-        if kurt < 3:
+    for mini, maxi, mean, dev in values:
+        # the crest factor is peak amplitude divided by average power
+        crest = (maxi - mini) / (2 * dev) if dev > 0 else 2.0
+
+        # the crest factor controls the slope of the color gradient
+        if crest < 2:
             # flatter distribution as the numbers decrease:
             # de-emphasize the mean
-            kurt_scale = kurt / 3.0
-            meancol = blend(rgb_fore, rgb_main, kurt_scale)
+            crest_scale = crest / 2.0
+            meancol = blend(rgb_fore, rgb_main, crest_scale)
             edgecol = rgb_dim
-            stdcol = blend(meancol, rgb_main, kurt_scale)
+            devcol = blend(meancol, rgb_main, crest_scale)
         else:
             # peakier distribution as the numbers increase:
             # de-emphasize the edges
-            kurt_scale = 1.0 / (kurt - 2.0)
+            crest_scale = 1.0 / (crest - 1.0)
             edgecol = rgb_dim
             meancol = rgb_fore
-            stdcol = blend(rgb_main, rgb_dim, kurt_scale)
-        # Draw a sequence of four gradients, from the edge to the standard
-        # deviation mark, to the mean, to the other edge of the std dev, then
-        # down to the far limit.
-        ymin = <int> round((1 - mini) * vscale)
+            devcol = blend(rgb_main, rgb_dim, crest_scale)
+
+        # Draw a sequence of four gradients illustrating the distribution.
         ymax = <int> round((1 - maxi) * vscale)
         ymean = <int> ((1 - mean) * vscale)
-        topdev = <int> (ymean - (std * vscale))
-        botdev = <int> (ymean + (std * vscale))
+        ymin = <int> round((1 - mini) * vscale)
+        topdev = <int> (ymean - (dev * vscale))
+        botdev = <int> (ymean + (dev * vscale))
 
+        # Fade up from the high peak to the power band.
         pixaddr = &buffer[ymax*stride + x]
-        pixaddr = vlerp(pixaddr, stride, edgecol, stdcol, topdev-ymax)
-        pixaddr = vlerp(pixaddr, stride, stdcol, meancol, ymean-topdev)
-        pixaddr = vlerp(pixaddr, stride, meancol, stdcol, botdev-ymean)
-        pixaddr = vlerp(pixaddr, stride, stdcol, edgecol, ymin-botdev)
+        pixaddr = vlerp(pixaddr, stride, edgecol, devcol, topdev-ymax)
+
+        # Fade up further to the mean.
+        pixaddr = vlerp(pixaddr, stride, devcol, meancol, ymean-topdev)
+
+        # Fade down to the other side of the power band.
+        pixaddr = vlerp(pixaddr, stride, meancol, devcol, botdev-ymean)
+
+        # Finally, fade back down to the low peak.
+        pixaddr = vlerp(pixaddr, stride, devcol, edgecol, ymin-botdev)
+
         x += 1
+
     cairo_surface_mark_dirty(surface)
     cairo_set_source_surface(cr, surface, 0, 0)
     cairo_paint(cr)
@@ -170,16 +200,16 @@ ctypedef numpy.float64_t DTYPE_t
 def condense(numpy.ndarray[DTYPE_t, ndim=1] data,
               int start, int width, float density):
     """
-    Returns a list of (min, max, mean, std, kurtosis) tuples, describing each
-    cell in the view of this data which scales by the given density factor and
-    runs for 'width' slices after 'start'.
+    Returns a list of (min, max, mean, std) tuples, describing each cell in the
+    view of this data which scales by the given density factor and runs for
+    'width' slices after 'start'.
     The statistical algorithm is based on the online_kurtosis example here:
     https://en.wikipedia.org/wiki/Algorithms_for_calculating_variance
 
     """
     cdef Py_ssize_t i, j, a, b, l
-    cdef double x, n, n1, delta, delta2, delta_n, delta_n2, M2, M3, M4
-    cdef double mini, maxi, mean, dev, kurt
+    cdef double x, n, n1, delta, delta2, delta_n, M2
+    cdef double mini, maxi, mean, dev
     res = []
     l = len(data)
     for i in range(start, start + width):
@@ -192,7 +222,7 @@ def condense(numpy.ndarray[DTYPE_t, ndim=1] data,
             if b > l: b = l
             mini = data[a]
             maxi = data[a]
-            mean, std, kurt = 0, 0, 3
+            mean, rms = 0, 0
             n, M2, M3, M4 = 0, 0, 0, 0
             for j in range(a, b):
                 x = data[j]
@@ -204,20 +234,11 @@ def condense(numpy.ndarray[DTYPE_t, ndim=1] data,
                 n += 1
                 delta = x - mean
                 delta_n = delta / n
-                delta_n2 = delta_n * delta_n
-                term1 = delta * delta_n * n1
                 mean += delta_n
-                M4 += term1 * delta_n2 * (n*n - 3*n + 3)
-                M4 += 6 * delta_n2 * M2
-                M4 += -4 * delta_n * M3
-                M3 += term1 * delta_n * (n - 2)
-                M3 += -3 * delta_n * M2
-                M2 += term1
+                M2 += delta * delta_n * n1
             # if we only had one sample then it is obviously the mean
             if n < 2: mean = mini
             # deviation is zero if all the samples are the same sample
             dev = sqrt(M2 / (n - 1)) if n > 1 else 0
-            # kurtosis of a normal distribution is 3 so use that as fallback
-            kurt = (n * M4) / (M2 * M2) if M2 > 0 else 3
-        res.append((mini, maxi, mean, dev, kurt))
+        res.append((mini, maxi, mean, dev))
     return res
