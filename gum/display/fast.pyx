@@ -53,29 +53,12 @@ cdef argb32 color(int r, int g, int b):
     return out
 
 
-cdef argb32 *vlerp(argb32 *buf, int stride, argb32 a, argb32 b, int rows):
-    if rows == 0:
-        return buf
-    if rows == 1:
-        buf[0] = blend(a, b, 0.5)
-        return buf + stride
-    cdef float step, factor
-    step = 1.0 / (<float>rows-1)
-    factor = 1.0
-    while rows > 0:
-        buf[0] = blend(a, b, factor)
-        buf += stride
-        factor -= step
-        rows -= 1
-    return buf
-
-
-cdef argb32 *vfade(
+cdef argb32 *vfadeup(
         argb32 *buf, int stride, argb32 a, argb32 b, int rows, float power):
     if rows == 0:
         return buf
     if rows == 1:
-        buf[0] = blend(a, b, 0.5 ** power)
+        buf[0] = blend(a, b, 0.5)
         return buf + stride
     cdef float step, factor
     step = 1.0 / (<float>rows)
@@ -84,6 +67,24 @@ cdef argb32 *vfade(
         buf[0] = blend(a, b, factor ** power)
         buf += stride
         factor -= step
+        rows -= 1
+    return buf
+
+
+cdef argb32 *vfadedown(
+        argb32 *buf, int stride, argb32 a, argb32 b, int rows, float power):
+    if rows == 0:
+        return buf
+    if rows == 1:
+        buf[0] = blend(a, b, 0.5)
+        return buf + stride
+    cdef float step, factor
+    step = 1.0 / (<float>rows - 1)
+    factor = 0
+    while rows > 0:
+        buf[0] = blend(b, a, factor ** power)
+        buf += stride
+        factor += step
         rows -= 1
     return buf
 
@@ -127,7 +128,7 @@ def draw_channel(list values, context, float fwidth, float fheight, colors):
     rgb_dim = color(0,0,0)
     rgb_dim.a = 0
     rgb_main = color(maincolor[0]*255, maincolor[1]*255, maincolor[2]*255)
-    rgb_fore = color(forecolor[0]*255, forecolor[1]*255, forecolor[1]*255)
+    rgb_fore = color(forecolor[0]*255, forecolor[1]*255, forecolor[2]*255)
 
     # Draw a line along the mean. This is a fallback for low density levels to
     # ensure that something always gets drawn.
@@ -141,28 +142,15 @@ def draw_channel(list values, context, float fwidth, float fheight, colors):
     stride /= 4 # sizeof rgba32
     cdef int ymax, ymin, ymean, topdev, botdev
     cdef double mini, maxi, mean, dev
-    cdef argb32 edgecol, meancol, stdcol
-    cdef double crest_scale
+    cdef argb32 meancol
     x = 0
     for mini, maxi, mean, dev in values:
         # the crest factor is peak amplitude divided by average power
-        crest = (maxi - mini) / (2 * dev) if dev > 0 else 2.0
+        peak = max(abs(maxi), abs(mini))
+        crest = peak / dev if dev > 0 else 1.0
 
-        # the crest factor controls the slope of the color gradient
-        if crest < 2:
-            # flatter distribution as the numbers decrease:
-            # de-emphasize the mean
-            crest_scale = crest / 2.0
-            meancol = blend(rgb_fore, rgb_main, crest_scale)
-            edgecol = rgb_dim
-            devcol = blend(meancol, rgb_main, crest_scale)
-        else:
-            # peakier distribution as the numbers increase:
-            # de-emphasize the edges
-            crest_scale = 1.0 / (crest - 1.0)
-            edgecol = rgb_dim
-            meancol = rgb_fore
-            devcol = blend(rgb_main, rgb_dim, crest_scale)
+        # the mean color fades toward white as the power increases
+        meancol = blend(rgb_main, rgb_fore, 1.0/crest)
 
         # Draw a sequence of four gradients illustrating the distribution.
         ymax = <int> round((1 - maxi) * vscale)
@@ -171,18 +159,16 @@ def draw_channel(list values, context, float fwidth, float fheight, colors):
         topdev = <int> (ymean - (dev * vscale))
         botdev = <int> (ymean + (dev * vscale))
 
-        # Fade up from the high peak to the power band.
+        # Fade up from the high peak to the power band, then up to the mean.
         pixaddr = &buffer[ymax*stride + x]
-        pixaddr = vlerp(pixaddr, stride, edgecol, devcol, topdev-ymax)
+        fade = 2.0 / crest
+        pixaddr = vfadeup(pixaddr, stride, rgb_dim, rgb_main, topdev-ymax, fade)
+        pixaddr = vfadedown(pixaddr, stride, rgb_main, meancol, ymean-topdev, fade)
 
-        # Fade up further to the mean.
-        pixaddr = vlerp(pixaddr, stride, devcol, meancol, ymean-topdev)
-
-        # Fade down to the other side of the power band.
-        pixaddr = vlerp(pixaddr, stride, meancol, devcol, botdev-ymean)
-
-        # Finally, fade back down to the low peak.
-        pixaddr = vlerp(pixaddr, stride, devcol, edgecol, ymin-botdev)
+        # Fade down to the other side of the power band, then to the low peak.
+        fade = crest / 2.0
+        pixaddr = vfadedown(pixaddr, stride, meancol, rgb_main, botdev-ymean, fade)
+        pixaddr = vfadeup(pixaddr, stride, rgb_main, rgb_dim, ymin-botdev, fade)
 
         x += 1
 
