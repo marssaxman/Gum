@@ -20,13 +20,13 @@ def read(filename):
 
 
 def write(filename, contents):
-    channels = contents.data.ndims
+    channels = contents.data.ndim
     format = contents.format
     f = pysndfile.PySndfile(
         filename,
         mode='w',
         format=format,
-        channels=contents.data.ndims,
+        channels=contents.data.ndim,
         samplerate=contents.samplerate
     )
     f.write_frames(contents.data)
