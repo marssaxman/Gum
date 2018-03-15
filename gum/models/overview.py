@@ -8,23 +8,16 @@ class Overview(object):
         self._width = 0
         self._density = 0
         self._sound = sound
-        self._sound.changed.connect(self.on_sound_changed)
-        self.on_sound_changed()
-
-    def on_sound_changed(self):
         self._values = None
-        # we should begin asynchronously recomputing the data we know we are
-        # likely to need, based on the existing view parameters.
 
     def _condense(self, start, width, density):
-        data = self._sound.frames
-        if self._sound.numchan == 1:
-            channels = [data]
+        if self._sound.ndim == 1:
+            data = [self._sound]
         else:
-            channels = data.transpose()
+            data = self._sound.transpose()
         o = []
-        for chan in channels:
-            values = display.condense(chan, start, width, density)
+        for channel in data:
+            values = display.condense(channel, start, width, density)
             o.append(values)
         return o
 

@@ -42,13 +42,13 @@ class Graph(object):
 
     def set_sound(self, sound):
         self._sound = sound
-        self._overview = Overview(self._sound)
         self._view_start = 0  # is a cell
         self.density = self.numframes() / float(self._width)
         self._sound.changed.connect(self.on_sound_changed)
         self.on_sound_changed()
 
     def on_sound_changed(self):
+        self._overview = Overview(self._sound.frames)
         self._update()
 
     def set_width(self, width):
