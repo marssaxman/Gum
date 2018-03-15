@@ -3,7 +3,6 @@
 # Licensed under the Revised BSD License.
 
 from gum.lib.event import Signal
-from overview import Overview
 from display import Display
 
 class Graph(object):
@@ -18,7 +17,7 @@ class Graph(object):
     def __init__(self, sound):
         self.changed = Signal()
         self._sound = None
-        self._overview = None
+        self._display = None
         self._view_start = 0
         self._width = 100.
         self._density = 1.
@@ -48,7 +47,7 @@ class Graph(object):
         self.on_sound_changed()
 
     def on_sound_changed(self):
-        self._overview = Overview(self._sound.frames)
+        self._display = Display(self._sound.frames)
         self._update()
 
     def set_width(self, width):
@@ -65,7 +64,7 @@ class Graph(object):
         if self._view_start < 0:
             self._view_start = 0
         # Move the overview to the new display region.
-        self._overview.set(self._view_start, self._width, self._density)
+        self._display.set(self._view_start, self._width, self._density)
         self.changed()
 
     def numframes(self):
@@ -185,7 +184,7 @@ class Graph(object):
         self._scroll(0.1)
 
     def display(self):
-        return Display(self._overview.get())
+        return self._display
 
 # Test functions
 

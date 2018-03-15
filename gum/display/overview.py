@@ -1,4 +1,7 @@
-from gum import display
+try:
+    from fast import condense
+except ImportError:
+    from slow import condense
 
 
 class Overview(object):
@@ -17,7 +20,7 @@ class Overview(object):
             data = self._sound.transpose()
         o = []
         for channel in data:
-            values = display.condense(channel, start, width, density)
+            values = condense(channel, start, width, density)
             o.append(values)
         return o
 
