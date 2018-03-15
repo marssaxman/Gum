@@ -1,3 +1,6 @@
+
+import gobject, threading
+from gum.lib.event import Signal
 try:
     from fast import condense
 except ImportError:
@@ -7,11 +10,14 @@ except ImportError:
 class Overview(object):
 
     def __init__(self, sound):
+        self.changed = Signal()
+        self._sound = sound
         self._start = 0
         self._width = 0
         self._density = 0
-        self._sound = sound
         self._values = None
+        self._ready = threading.Event()
+        self._ready.set()
 
     def _condense(self, start, width, density):
         if self._sound.ndim == 1:
@@ -24,8 +30,14 @@ class Overview(object):
             o.append(values)
         return o
 
-    def set(self, start, width, density):
+    def set(self, *args):
+        self._ready.wait()
+        self._ready.clear()
+        thread = threading.Thread(target=lambda: self._update(*args))
+        thread.daemon = True
+        thread.start()
 
+    def _update(self, start, width, density):
         if self._values is None:
             # We have no cached data.
             self._recompute(start, width, density)
@@ -59,17 +71,22 @@ class Overview(object):
         ov = zip(*head) + body + zip(*tail)
         ov = zip(*ov)
         ov = [list(t) for t in ov]
-        self._start = start
-        self._width = width
-        self._values = ov
+        self._finish_update(start, width, density, ov)
 
     def _recompute(self, start, width, density):
+        values = self._condense(start, width, density)
+        self._finish_update(start, width, density, values)
+
+    def _finish_update(self, start, width, density, values):
         self._start = start
         self._width = width
         self._density = density
-        self._values = self._condense(start, width, density)
+        self._values = values
+        self._ready.set()
+        gobject.idle_add(lambda x: x.changed(), self)
 
     def get(self):
+        self._ready.wait()
         return self._values
 
 

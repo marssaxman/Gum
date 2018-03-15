@@ -11,6 +11,7 @@ class Display(object):
     def __init__(self, sound):
         self._sound = sound
         self._overview = Overview(sound)
+        self.changed = self._overview.changed
         hue = 212.0 / 365.0
         gridcolor = (0.2, 0.2, 0.2)
         maincolor = colorsys.hls_to_rgb(hue, 0.5, 1.0)
