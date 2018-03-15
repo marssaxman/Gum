@@ -97,7 +97,9 @@ class EditorWindow(gtk.Window):
 
         self.connect("delete-event", self.quit)
         self.set_icon_from_file(gum.logofile)
-        self.resize(700, 500)
+        width = int((3 * self.get_screen().get_width()) / 4)
+        self.resize(width, 500)
+        self.set_position(gtk.WIN_POS_CENTER)
         self.show_all()
 
     def _make_ui_manager(self):
