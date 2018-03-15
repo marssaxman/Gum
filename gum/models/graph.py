@@ -4,7 +4,7 @@
 
 from gum.lib.event import Signal
 from overview import Overview
-
+from display import Display
 
 class Graph(object):
     """Scale the sound visualization.
@@ -184,9 +184,8 @@ class Graph(object):
     def scroll_right(self):
         self._scroll(0.1)
 
-    def channels(self):
-        "Return the graph values."
-        return self._overview.get()
+    def display(self):
+        return Display(self._overview.get())
 
 # Test functions
 

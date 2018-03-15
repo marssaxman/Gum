@@ -3,4 +3,5 @@ try:
 except ImportError:
     from slow import condense, draw_channel
 
+from display import Display
 
