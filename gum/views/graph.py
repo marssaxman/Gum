@@ -19,7 +19,7 @@ class Graph(object):
         self._sound = None
         self._display = None
         self._view_start = 0
-        self._width = 100.
+        self._width_px = 100.
         self._density = 1.
         self.set_sound(sound)
 
@@ -28,7 +28,7 @@ class Graph(object):
 
     def _set_density(self, value):
         mini = 1
-        maxi = max(mini, self.numframes() / float(self._width))
+        maxi = max(mini, self.numframes() / float(self._width_px))
         self._density = self._gauge(value, mini, maxi)
 
     density = property(_get_density, _set_density)
@@ -42,7 +42,7 @@ class Graph(object):
     def set_sound(self, sound):
         self._sound = sound
         self._view_start = 0  # is a cell
-        self.density = self.numframes() / float(self._width)
+        self.density = self.numframes() / float(self._width_px)
         self._sound.changed.connect(self.on_sound_changed)
         self.on_sound_changed()
 
@@ -56,19 +56,19 @@ class Graph(object):
 
     def set_width(self, width):
         start, end = self.view()
-        self._width = width
+        self._width_px = width
         self.density = (end - start) / float(width)
         self.move_to(start)
 
     def _update(self):
         # Clamp the view parameters within reasonable limits.
         numcells = self._frame2cell(self.numframes())
-        if self._view_start + self._width > numcells:
-            self._view_start = numcells - self._width
+        if self._view_start + self._width_px > numcells:
+            self._view_start = numcells - self._width_px
         if self._view_start < 0:
             self._view_start = 0
         # Move the overview to the new display region.
-        self._display.set(self._view_start, self._width, self._density)
+        self._display.set(self._view_start, self._width_px, self._density)
 
     def numframes(self):
         return len(self._sound.frames)
@@ -78,14 +78,14 @@ class Graph(object):
         Return start and end frames; end is exclusive.
         """
         start = self._cell2frame(self._view_start)
-        end = start + self._cell2frame(self._width)
+        end = start + self._cell2frame(self._width_px)
         n = self.numframes()
         if end > n:
             end = n
         return (start, end)
 
     def set_view(self, start, end):
-        self.density = (end - start) / float(self._width)
+        self.density = (end - start) / float(self._width_px)
         self.move_to(start)
 
     def move_to(self, frame):
@@ -94,7 +94,7 @@ class Graph(object):
         self._update()
 
     def center_on(self, frame):
-        self.move_to(frame - (self._width - 1) * self.density * 0.5)
+        self.move_to(frame - (self._width_px - 1) * self.density * 0.5)
 
     def frmtopxl(self, f):
         "Converts a frame index to a pixel index."
@@ -176,7 +176,7 @@ class Graph(object):
         0.1 is 10%, 0.5 is one half, 1.0 is 100%.
 
         """
-        l = self._width * factor
+        l = self._width_px * factor
         self._view_start += l
         self._update()
 
@@ -186,8 +186,8 @@ class Graph(object):
     def scroll_right(self):
         self._scroll(0.1)
 
-    def display(self):
-        return self._display
+    def draw(self, context, width, height):
+        return self._display.draw(context, width, height)
 
 # Test functions
 

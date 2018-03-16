@@ -176,7 +176,7 @@ class WaveformLayer(CachedLayer):
         graph.changed.connect(self.update)
 
     def draw(self, context, width, height):
-        self._graph.display().draw(context, width, height)
+        self._graph.draw(context, width, height)
 
 
 class BackgroundLayer(Layer):
