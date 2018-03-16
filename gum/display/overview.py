@@ -33,57 +33,61 @@ class Overview(object):
     def set(self, *args):
         self._ready.wait()
         self._ready.clear()
-        thread = threading.Thread(target=lambda: self._update(*args))
+        thread = threading.Thread(target=self._update, args=args)
         thread.daemon = True
         thread.start()
 
     def _update(self, start, width, density):
-        if self._values is None:
-            # We have no cached data.
-            self._recompute(start, width, density)
-            return
-
-        if self._density != density:
-            # Zoom level has changed. Old data is unusable.
-            self._recompute(start, width, density)
-            return
-
         start = int(start)
+        width = int(width)
         stop = start + width
-        old_stop = self._start + self._width
-        inter_start = max(start, self._start)
-        inter_stop = min(stop, old_stop)
+        self_stop = self._start + self._width
 
-        if stop <= self._start or start >= old_stop:
-            # None of the cached data applies to the requested interval.
-            self._recompute(start, width, density)
-            return
-
-        # Some of the data in the cache is relevant. Compute the missing part.
-        head, tail = [], []
-        if start < inter_start:
-            head = self._condense(start, inter_start - start, density)
-        if inter_stop < stop:
-            tail = self._condense(inter_stop, stop - inter_stop, density)
-
-        i, j = [int(x - self._start) for x in (inter_start, inter_stop)]
-        body = zip(*self._values)[i:j]
-        ov = zip(*head) + body + zip(*tail)
-        ov = zip(*ov)
-        ov = [list(t) for t in ov]
-        self._finish_update(start, width, density, ov)
-
-    def _recompute(self, start, width, density):
-        values = self._condense(start, width, density)
-        self._finish_update(start, width, density, values)
-
-    def _finish_update(self, start, width, density, values):
+        if self._values is None:
+            values = self._condense(start, width, density)
+        elif self._density > density:
+            values = self._zoom_in(start, width, density)
+        elif self._density < density:
+            values = self._zoom_out(start, width, density)
+        elif start < self._start and stop > self._start:
+            values = self._scroll_left(start, width, density)
+        elif stop > self_stop and start < self_stop:
+            values = self._scroll_right(start, width, density)
+        else:
+            values = self._condense(start, width, density)
         self._start = start
         self._width = width
         self._density = density
         self._values = values
         self._ready.set()
         gobject.idle_add(lambda x: x.changed(), self)
+
+    def _scroll_left(self, start, width, density):
+        assert start < self._start and width == self._width
+        stop = start + width
+        assert stop > self._start
+        ov = self._condense(start, self._start - start, density)
+        keep_width = stop - self._start
+        for i, channel in enumerate(self._values):
+            ov[i] = ov[i] + channel[:keep_width]
+        return ov
+
+    def _scroll_right(self, start, width, density):
+        assert width == self._width
+        self_stop = self._start + self._width
+        assert start < self_stop
+        stop = start + width
+        ov = self._condense(self_stop, stop - self_stop, density)
+        keep_start = start - self._start
+        for i, channel in enumerate(self._values):
+            ov[i] = channel[keep_start:] + ov[i]
+        return ov
+
+    def _zoom_in(self, start, width, density):
+        return self._condense(start, width, density)
+
+    def _zoom_out(self, start, width, density):
+        return self._condense(start, width, density)
 
     def get(self):
         self._ready.wait()
