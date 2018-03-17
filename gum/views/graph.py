@@ -48,11 +48,7 @@ class Graph(object):
 
     def on_sound_changed(self):
         self._display = Display(self._sound.frames)
-        self._display.changed.connect(self.on_display_changed)
         self._update()
-
-    def on_display_changed(self):
-        self.changed()
 
     def set_width(self, width):
         start, end = self.view()
@@ -69,6 +65,7 @@ class Graph(object):
             self._view_start = 0
         # Move the overview to the new display region.
         self._display.set(self._view_start, self._width_px, self._density)
+        self.changed()
 
     def numframes(self):
         return len(self._sound.frames)

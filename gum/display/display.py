@@ -11,7 +11,6 @@ class Display(object):
     def __init__(self, sound):
         self._sound = sound
         self._overview = Overview(sound)
-        self.changed = self._overview.changed
         hue = 212.0 / 365.0
         gridcolor = (0.2, 0.2, 0.2)
         maincolor = colorsys.hls_to_rgb(hue, 0.5, 1.0)
@@ -19,10 +18,10 @@ class Display(object):
         self._colors = (gridcolor, maincolor, forecolor)
 
     def set(self, start, width, density):
-        self._overview.set(start, width, density)
+        self._view = (int(start), int(width), float(density))
 
     def draw(self, context, width, height):
-        data = self._overview.get()
+        data = self._overview(*self._view)
         numchan = len(data)
         if numchan > 1:
             height /= numchan

@@ -1,137 +1,126 @@
+from collections import namedtuple
 
-import gobject, threading
-from gum.lib.event import Signal
-try:
-    from fast import condense
-except ImportError:
-    from slow import condense
+Cell = namedtuple('Cell', 'min max mean std')
 
 
-class Overview(object):
+def _condense(data, start, width, density):
+    """
+    Scale the data by the density factor and slice it into cells. Compute
+    the statistical properties of each cell. Return a list of cell values.
+    """
+    res = []
+    start = int(start)
+    width = int(width)
+    dlen = len(data)
+    for i in range(start, start + width):
+        a = int(round((i - 0.25) * density))
+        b = int(round((i + 1.25) * density))
+        if a < 0: a = 0
+        if a >= dlen: break
+        if b > dlen: b = dlen
+        d = data[a:b]
+        mini = d.min()
+        maxi = d.max()
+        mean = d.mean() if dlen >= 2 else mini
+        std = d.std() if dlen > 2 else 0
+        res.append(Cell(mini, maxi, mean, std))
+    return res
+
+
+def _merge_cells(vals):
+    o_min, o_max, o_mean, o_std = 1, -1, 0, 0
+    for v in vals:
+        o_min = min(v.min, o_min)
+        o_max = max(v.max, o_max)
+        o_mean += v.mean
+        o_std += v.std
+    o_mean /= len(vals)
+    o_std /= len(vals)
+    return Cell(o_min, o_max, o_mean, o_std)
+
+
+class Condense(object):
 
     def __init__(self, sound):
-        self.changed = Signal()
         self._sound = sound
+
+    def __len__(self):
+        return len(self._sound)
+
+    def __call__(self, *args):
+        return [_condense(ch, *args) for ch in self._sound.transpose()]
+
+
+class Downsample(object):
+
+    def __init__(self, source, threshold_density=2048):
+        self._source = source
+        self._threshold = threshold_density
+        self._density = 0.5 * threshold_density
+        width = int(float(len(source)) / self._density)
+        self._values = source(0, width, self._density)
+
+    def __len__(self):
+        return len(self._source)
+
+    def __call__(self, start, width, density):
+        if density < self._threshold:
+            return self._source(start, width, density)
+        out = []
+        density /= self._density
+        for in_channel in self._values:
+            out_channel = []
+            for out_x in range(0, width):
+                in_start = int(round((start + out_x) * density))
+                in_stop = int(round((start + out_x + 1) * density))
+                in_stop = min(in_stop, len(in_channel))
+                out_v = _merge_cells(in_channel[in_start:in_stop])
+                out_channel.append(out_v)
+            out.append(out_channel)
+        return out
+
+
+class Scroll(object):
+
+    def __init__(self, source):
+        self._source = source
         self._start = 0
         self._width = 0
         self._density = 0
         self._values = None
-        self._ready = threading.Event()
-        self._ready.set()
 
-    def _condense(self, start, width, density):
-        if self._sound.ndim == 1:
-            data = [self._sound]
-        else:
-            data = self._sound.transpose()
-        o = []
-        for channel in data:
-            values = condense(channel, start, width, density)
-            o.append(values)
-        return o
+    def __len__(self):
+        return len(self._source)
 
-    def set(self, *args):
-        self._ready.wait()
-        self._ready.clear()
-        thread = threading.Thread(target=self._update, args=args)
-        thread.daemon = True
-        thread.start()
+    def _calc(self, start, width):
+        return self._source(start, width, self._density)
 
-    def _update(self, start, width, density):
-        start = int(start)
-        width = int(width)
-        stop = start + width
-        self_stop = self._start + self._width
-
-        if self._values is None:
-            values = self._condense(start, width, density)
-        elif self._density > density:
-            values = self._zoom_in(start, width, density)
-        elif self._density < density:
-            values = self._zoom_out(start, width, density)
-        elif start < self._start and stop > self._start:
-            values = self._scroll_left(start, width, density)
-        elif stop > self_stop and start < self_stop:
-            values = self._scroll_right(start, width, density)
-        else:
-            values = self._condense(start, width, density)
+    def __call__(self, start, width, density):
+        values = None
+        if self._values is not None and self._density == density:
+            stop = start + width
+            self_stop = self._start + self._width
+            if start == self._start and stop == self_stop:
+                values = self._values
+            elif start < self._start and stop > self._start:
+                values = self._calc(start, self._start - start)
+                keep_width = stop - self._start
+                for i, channel in enumerate(self._values):
+                    values[i] = values[i] + channel[:keep_width]
+            elif stop > self_stop and start < self_stop:
+                values = self._calc(self_stop, stop - self_stop)
+                keep_start = start - self._start
+                for i, channel in enumerate(self._values):
+                    values[i] = channel[keep_start:] + values[i]
+        if not values:
+            self._density = density
+            values = self._calc(start, width)
         self._start = start
         self._width = width
-        self._density = density
         self._values = values
-        self._ready.set()
-        gobject.idle_add(lambda x: x.changed(), self)
-
-    def _scroll_left(self, start, width, density):
-        assert start < self._start and width == self._width
-        stop = start + width
-        assert stop > self._start
-        ov = self._condense(start, self._start - start, density)
-        keep_width = stop - self._start
-        for i, channel in enumerate(self._values):
-            ov[i] = ov[i] + channel[:keep_width]
-        return ov
-
-    def _scroll_right(self, start, width, density):
-        assert width == self._width
-        self_stop = self._start + self._width
-        assert start < self_stop
-        stop = start + width
-        ov = self._condense(self_stop, stop - self_stop, density)
-        keep_start = start - self._start
-        for i, channel in enumerate(self._values):
-            ov[i] = channel[keep_start:] + ov[i]
-        return ov
-
-    def _zoom_in(self, start, width, density):
-        return self._condense(start, width, density)
-
-    def _zoom_out(self, start, width, density):
-        return self._condense(start, width, density)
-
-    def get(self):
-        self._ready.wait()
         return self._values
 
 
+def Overview(sound):
+    return Scroll(Downsample(Condense(sound)))
 
-DTYPE = 'float64'
-
-
-def test_overview():
-    import numpy
-    l = 1000000
-    b = numpy.array(range(l), DTYPE)
-    assert len(display.condense(b, 0, l, l/10)) == 10
-    assert len(display.condense(b, 0, l, l/100)) == 100
-
-
-def test_Overview():
-    import numpy
-
-    cache = Overview(numpy.array([1, 2, 3, 4], DTYPE))
-    o = cache.get(start=0, width=4, density=1)
-    assert o == [[(1, 1), (2, 2), (3, 3), (4, 4)]]
-
-    o2 = cache.get(start=0, width=4, density=1)
-    assert o2 == o
-    assert o2 is o
-
-    cache = Overview(numpy.array([1, 2, 3, 4], DTYPE))
-    o3 = cache.get(start=0, width=4, density=1)
-    assert o3 == o
-    assert o3 is not o
-
-    cache = Overview(numpy.array(range(1000), DTYPE))
-    o1 = cache.get(start=0, width=10, density=10)
-    o2 = cache.get(start=4, width=10, density=10)
-    o3 = cache.get(start=0, width=10, density=10)
-    o4 = cache.get(start=4, width=10, density=10)
-    assert o1 == o3
-    assert o2 == o4
-    assert o1[0][4:] == o2[0][:6], str(o1[0][4:]) + str(o2[0][:6])
-
-
-if __name__ == "__main__":
-    test_overview()
-    test_OverviewCache()

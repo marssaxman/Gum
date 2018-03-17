@@ -1,32 +1,4 @@
-# Python fallbacks if we happen not to have compiled the Cython versions
-
-from collections import namedtuple
-
-CellStats = namedtuple('CellStats', 'min max mean std')
-
-def condense(data, start, width, density):
-    """
-    Scale the data by the density factor and slice it into cells. Compute
-    the statistical properties of each cell. Return a list of values, in the
-    form of a CellStats tuple.
-    """
-    res = []
-    start = int(start)
-    width = int(width)
-    dlen = len(data)
-    for i in range(start, start + width):
-        a = int(round((i - 0.25) * density))
-        b = int(round((i + 1.25) * density))
-        if a < 0: a = 0
-        if a >= dlen: break
-        if b > dlen: b = dlen
-        d = data[a:b]
-        mini = d.min()
-        maxi = d.max()
-        mean = d.mean() if dlen >= 2 else mini
-        std = d.std() if dlen > 2 else 0
-        res.append(CellStats(mini, maxi, mean, std))
-    return res
+# Python fallback if we happen not to have compiled the Cython version
 
 def draw_channel(values, context, width, height, colors):
     gridcolor, maincolor, forecolor = colors
