@@ -3,8 +3,9 @@
 # Licensed under the Revised BSD License.
 
 from gum.lib import event
-from gum.models import Graph, Cursor, Sound, Selection, sound
+from gum.models import Cursor, Sound, Selection, sound
 from gum.controllers import Editor, Player, effect
+from gum.views import Graph
 import os.path
 import glob
 import imp
