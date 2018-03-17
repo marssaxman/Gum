@@ -15,11 +15,6 @@ virtualenv -p python2 --system-site-packages venv
 source venv/bin/activate
 pip install -r requirements.txt
 
-log "\n→ Building fast waveform display..."
-pushd gum/display
-make clean && make
-popd
-
 log "\n→ Building audio effects..."
 pushd gum/fx
 make clean && make
