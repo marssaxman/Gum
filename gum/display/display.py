@@ -22,6 +22,7 @@ class Display(object):
 
     def set(self, start, width, density):
         self._view = (int(start), int(width), float(density))
+        self._density = density
 
     def draw(self, context, width, height):
         data = self._overview(*self._view)
@@ -37,10 +38,13 @@ class Display(object):
     def draw_channel(self, data, context, width, height):
         self._draw_origin(context, width, height)
         start, width, density = self._view
-        if density < 96:
-            self._draw_fill(data, context, width, height)
-        if density > 32:
-            self._draw_density(data, context, width, height)
+        if density < 128:
+            alpha = max(0.0, (density - 32.0) / 96.0)
+            alpha = 1.0 - (alpha * alpha)
+            self._draw_fill(data, context, width, height, alpha)
+        if density > 8:
+            alpha = min(1.0, (density - 8.0) / 96.0)
+            self._draw_gradient(data, context, width, height, alpha)
         if density < 8:
             self._draw_line(data, context, width, height)
 
@@ -66,13 +70,14 @@ class Display(object):
         context.stroke()
         context.restore()
 
-    def _draw_fill(self, data, context, width, height):
+    def _draw_fill(self, data, context, width, height, alpha):
         # Draw the outline of the waveform; fill the shape between its limits.
         context.save()
         height /= 2
         context.translate(0, height)
         context.scale(1.0, -1.0)
-        context.set_source_rgb(*self._colors.main)
+        r, g, b = self._colors.main
+        context.set_source_rgba(r, g, b, alpha)
         context.move_to(0, data[0].min * height)
         for i in range(1, len(data)):
             context.line_to(i, data[i].min * height - 0.5)
@@ -82,7 +87,7 @@ class Display(object):
         context.fill()
         context.restore()
 
-    def _draw_density(self, data, context, width, height):
+    def _draw_gradient(self, data, context, width, height, alpha):
         ypix, xpix = np.mgrid[:height, :width]
         yidx = 1 - (ypix.astype(np.float) / (float(height)/2))
 
@@ -121,7 +126,8 @@ class Display(object):
         fmt = cairo.FORMAT_A8
         mask = np.asarray(mask * 255, dtype=np.uint8)
         img = cairo.ImageSurface.create_for_data(mask, fmt, width, height)
-        context.set_source_rgb(*self._colors.main)
+        r, g, b = self._colors.main
+        context.set_source_rgba(r, g, b, alpha)
         context.mask_surface(img)
 
         ramp_lo = np.tanh((yidx - ylostd) / (ylostd - ymin) * np.pi)
@@ -131,9 +137,12 @@ class Display(object):
         ramp_hi = (ramp_hi + 1.0) / 2.0
         ramp_hi *= (yidx < ymax)
         mask = (ramp_hi * ramp_lo) ** ycrest
+        # the body highlighting is less meaningful at lower zoom levels
+        mask *= 1.0 - (1.0 / np.log(self._density))
 
         mask = np.asarray(mask * 255, dtype=np.uint8)
         img = cairo.ImageSurface.create_for_data(mask, fmt, width, height)
-        context.set_source_rgb(*self._colors.fore)
+        r, g, b = self._colors.fore
+        context.set_source_rgba(r, g, b, alpha)
         context.mask_surface(img)
 
