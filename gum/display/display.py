@@ -110,6 +110,17 @@ class Display(object):
         yhistd = yavg + ystd
         ycrest = np.tile(crests, (height, 1))
 
+        def paint(mask, color):
+            mask = np.asarray(mask * 255, dtype=np.uint8)
+            fmt = cairo.FORMAT_A8
+            stride = cairo.ImageSurface.format_stride_for_width(fmt, width)
+            if stride > width:
+                mask = np.pad(mask, ((0,0), (0, stride-width)), 'constant')
+            img = cairo.ImageSurface.create_for_data(mask, fmt, width, height)
+            r, g, b = color
+            context.set_source_rgba(r, g, b, alpha)
+            context.mask_surface(img)
+
         ramp_lo = (yidx - ymin) / (ylostd - ymin + iota)
         ramp_lo = np.clip(ramp_lo, 0, 1)
         ramp_lo *= (yidx >= ymin)
@@ -122,13 +133,7 @@ class Display(object):
         mask /= 1.36
         # power curve
         mask = np.sqrt(mask)
-
-        fmt = cairo.FORMAT_A8
-        mask = np.asarray(mask * 255, dtype=np.uint8)
-        img = cairo.ImageSurface.create_for_data(mask, fmt, width, height)
-        r, g, b = self._colors.main
-        context.set_source_rgba(r, g, b, alpha)
-        context.mask_surface(img)
+        paint(mask, self._colors.main)
 
         ramp_lo = np.tanh((yidx - ylostd) / (ylostd - ymin + iota) * np.pi)
         ramp_lo = (ramp_lo + 1.0) / 2.0
@@ -139,10 +144,6 @@ class Display(object):
         mask = (ramp_hi * ramp_lo) ** ycrest
         # the body highlighting is less meaningful at lower zoom levels
         mask *= 1.0 - (1.0 / np.log(self._density))
+        paint(mask, self._colors.fore)
 
-        mask = np.asarray(mask * 255, dtype=np.uint8)
-        img = cairo.ImageSurface.create_for_data(mask, fmt, width, height)
-        r, g, b = self._colors.fore
-        context.set_source_rgba(r, g, b, alpha)
-        context.mask_surface(img)
 
