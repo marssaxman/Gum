@@ -5,62 +5,12 @@
 import gtk
 import gobject
 import cairo
-
-# -- Base classes for drawing sound visualization.
-#
-# CairoWidget, LayeredCairoWidget, and LayeredGraphView are defined as
-# successive subclasses only for code clarity. Everything could as
-# well be stuck in LayeredGraphView.
-#
-class CairoWidget(gtk.DrawingArea):
-
-    __gsignals__ = {"expose-event": "override"}
-
-    def __init__(self):
-        gtk.DrawingArea.__init__(self)
-        self._redrawing = False
-
-    def do_expose_event(self, event):
-        context = self.window.cairo_create()
-        context.rectangle(event.area.x, event.area.y,
-                          event.area.width, event.area.height)
-        context.clip()
-        width, height = self.window.get_size()
-        self.draw(context, width, height)
-        self._redrawing = False
-
-    def redraw(self):
-        # queue_draw() emits an expose event. Double buffering is used
-        # automatically in the expose event handler.
-        if not self._redrawing:
-            self._redrawing = True
-            self.queue_draw()
-
-    def draw(self, context, width, height):
-        """Must be overriden to draw to the cairo context."""
-        pass
+import overlay
 
 
-class LayeredCairoWidget(CairoWidget):
-    """A widget with several layers.
-
-    This widget paints itself by successively passing its context to
-    layer objects. The draw() method of a layer object must paint to
-    the context.
-    
-    """
-    def __init__(self):
-        super(LayeredCairoWidget, self).__init__()
-        self.layers = []
-        
-    def draw(self, context, width, height):
-        for layer in self.layers:
-            layer.stack(context, width, height)
-
-
-class LayeredGraphView(LayeredCairoWidget):
+class LayeredGraphView(overlay.Canvas):
     """A layered widget dedicated to a Graph object.
-    
+
     Every time the widget is resized, the new width is passed to the
     Graph object.
 
@@ -106,32 +56,10 @@ class GraphView(LayeredGraphView):
         self.layers = []
 
 
-
-# -- Layers that can be added to LayeredGraphview.
-#
-
-class Layer(object):
-    """Base class for layers."""
-
-    def __init__(self, layered):
-        self._layered = layered
-
-    def stack(self, context, width, height):
-        """Paint the layer on top of the passed context."""
-        context.set_operator(cairo.OPERATOR_OVER)
-        self.draw(context, width, height)
-
-    def update(self):
-        self._layered.redraw()
-
-    def draw(context, width, height):
-        raise NotImplemented
-
-
-class CachedLayer(Layer):
+class CachedLayer(overlay.Layer):
     """Implements surface caching."""
-    
     def __init__(self, layered):
+        super(CachedLayer, self).__init__(layered)
         self._layered = layered
         self._must_draw = True
         self._surface = None
@@ -143,7 +71,7 @@ class CachedLayer(Layer):
 
     def update(self):
         self._must_draw = True
-        Layer.update(self)
+        super(CachedLayer, self).update()
 
     def stack(self, context, width, height):
         if self._surface is None:
@@ -164,6 +92,7 @@ class CachedLayer(Layer):
         context.set_operator(cairo.OPERATOR_OVER)
         context.paint()
 
+
 class WaveformLayer(CachedLayer):
     """A layer for LayeredGraphView.
 
@@ -171,7 +100,7 @@ class WaveformLayer(CachedLayer):
 
     """
     def __init__(self, layered, graph):
-        CachedLayer.__init__(self, layered)
+        super(WaveformLayer, self).__init__(layered)
         self._graph = graph
         graph.changed.connect(self.update)
 
@@ -179,12 +108,12 @@ class WaveformLayer(CachedLayer):
         self._graph.draw(context, width, height)
 
 
-class BackgroundLayer(Layer):
+class BackgroundLayer(overlay.Layer):
     """A layer for LayeredGraphView.
 
     """
     def __init__(self, layered, selection):
-        Layer.__init__(self, layered)
+        super(BackgroundLayer, self).__init__(layered)
         self._selection = selection
         self._selection.changed.connect(self.update)
 
@@ -201,14 +130,14 @@ class BackgroundLayer(Layer):
             context.fill()
 
 
-class SelectionLayer(Layer):
+class SelectionLayer(overlay.Layer):
     """A layer for LayeredGraphView.
 
     It highlights the selected area.
 
     """
     def __init__(self, layered, selection):
-        Layer.__init__(self, layered)
+        super(SelectionLayer, self).__init__(layered)
         self._selection = selection
         self._selection.changed.connect(self.update)
 
@@ -221,10 +150,9 @@ class SelectionLayer(Layer):
             context.fill()
 
 
-class CursorLayer(Layer):
-
+class CursorLayer(overlay.Layer):
     def __init__(self, layered, cursor):
-        Layer.__init__(self, layered)
+        super(CursorLayer, self).__init__(layered)
         self._cursor = cursor
         self._cursor.changed.connect(self.update)
         self.rgba = (1, 1, 1, 0.5)
