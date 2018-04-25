@@ -3,7 +3,8 @@
 # Licensed under the Revised BSD License.
 
 from gum.lib.event import Signal
-from display import Display
+import display
+
 
 class Graph(object):
     """Scale the sound visualization.
@@ -47,7 +48,7 @@ class Graph(object):
         self.on_sound_changed()
 
     def on_sound_changed(self):
-        self._display = Display(self._sound.frames)
+        self._display = display.Waveform(self._sound.frames)
         self._update()
 
     def set_width(self, width):

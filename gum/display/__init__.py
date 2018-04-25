@@ -1,2 +1,2 @@
-from display import Display
+from waveform import Waveform
 

@@ -2,14 +2,12 @@ import colorsys
 import numpy as np
 import cairo
 from overview import Overview
-
 from collections import namedtuple
 
-Colors = namedtuple('Colors', 'grid main fore')
+_Colors = namedtuple('_Colors', 'grid main fore')
 
 
-
-class Display(object):
+class Waveform(object):
 
     def __init__(self, sound):
         self._sound = sound
@@ -18,7 +16,7 @@ class Display(object):
         gridcolor = (0.2, 0.2, 0.2)
         maincolor = colorsys.hls_to_rgb(hue, 0.5, 1.0)
         forecolor = colorsys.hls_to_rgb(hue, 0.75, 1.0)
-        self._colors = Colors(gridcolor, maincolor, forecolor)
+        self._colors = _Colors(gridcolor, maincolor, forecolor)
 
     def set(self, start, width, density):
         self._view = (int(start), int(width), float(density))
@@ -115,7 +113,7 @@ class Display(object):
             fmt = cairo.FORMAT_A8
             stride = cairo.ImageSurface.format_stride_for_width(fmt, width)
             if stride > width:
-                mask = np.pad(mask, ((0,0), (0, stride-width)), 'constant')
+                mask = np.pad(mask, ((0, 0), (0, stride-width)), 'constant')
             img = cairo.ImageSurface.create_for_data(mask, fmt, width, height)
             r, g, b = color
             context.set_source_rgba(r, g, b, alpha)
@@ -129,7 +127,7 @@ class Display(object):
         ramp_hi *= (yidx <= ymax)
         mask = ramp_hi * ramp_lo
         # do a little bit of horizontal anti-aliasing
-        mask[:,1:-1] += mask[:,:-2] * 0.18 + mask[:,2:] * 0.18
+        mask[:, 1:-1] += mask[:, :-2] * 0.18 + mask[:, 2:] * 0.18
         mask /= 1.36
         # power curve
         mask = np.sqrt(mask)
@@ -145,5 +143,3 @@ class Display(object):
         # the body highlighting is less meaningful at lower zoom levels
         mask *= 1.0 - (1.0 / np.log(self._density))
         paint(mask, self._colors.fore)
-
-
