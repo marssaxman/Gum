@@ -48,10 +48,20 @@ class Canvas(_CairoWidget):
     def __init__(self):
         super(Canvas, self).__init__()
         self.layers = []
+        self.connect("destroy", self.on_destroy)
+        self.emit("destroy")
 
     def draw(self, context, width, height):
         for layer in self.layers:
             layer.stack(context, width, height)
+
+    def on_destroy(self, widget):
+        # Lose the references to Layers objects, otherwise they do not
+        # get garbage-collected. I suspect a strange interaction
+        # between the gobject and the Python reference counting
+        # systems.
+        self.layers = []
+
 
 
 class Layer(object):

@@ -50,18 +50,10 @@ class _GraphView(overlay.Canvas):
         _MouseScroll(self, graph)
         _MouseMiddleClick(self, graph)
         _PointerStyle(self, selection)
-        self.connect("destroy", self.on_destroy)
         self.connect("size_allocate", self.on_resize)
 
     def on_resize(self, widget, rect):
         self._graph.set_width(rect.width)
-
-    def on_destroy(self, widget):
-        # Lose the references to Layers objects, otherwise they do not
-        # get garbage-collected. I suspect a strange interaction
-        # between the gobject and the Python reference counting
-        # systems.
-        self.layers = []
 
 
 class _CachedLayer(overlay.Layer):
