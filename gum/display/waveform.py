@@ -97,7 +97,7 @@ class Waveform(object):
         lopks = avgs - mins
         hipks = maxs - avgs
         peaks = (lopks * (lopks >= hipks)) + (hipks * (hipks > lopks))
-        crests = peaks / stds
+        crests = peaks / (stds + iota)
 
         ymin = np.tile(mins, (height, 1))
         ymax = np.tile(maxs, (height, 1))
