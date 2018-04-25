@@ -130,10 +130,10 @@ class Display(object):
         context.set_source_rgba(r, g, b, alpha)
         context.mask_surface(img)
 
-        ramp_lo = np.tanh((yidx - ylostd) / (ylostd - ymin) * np.pi)
+        ramp_lo = np.tanh((yidx - ylostd) / (ylostd - ymin + iota) * np.pi)
         ramp_lo = (ramp_lo + 1.0) / 2.0
         ramp_lo *= (yidx > ymin)
-        ramp_hi = np.tanh((yhistd - yidx) / (ymax - yhistd) * np.pi)
+        ramp_hi = np.tanh((yhistd - yidx) / (ymax - yhistd + iota) * np.pi)
         ramp_hi = (ramp_hi + 1.0) / 2.0
         ramp_hi *= (yidx < ymax)
         mask = (ramp_hi * ramp_lo) ** ycrest
