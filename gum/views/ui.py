@@ -14,7 +14,7 @@ sys.argv[0] = constants.__appname__
 import gum
 from gum import app
 from gum.controllers import Editor, editor
-from waveform import GraphView, GraphScrollbar
+import timeline
 from filedialog import OpenFileDialog, SaveFileDialog, SaveSelectionFileDialog
 from lib import audiofile
 import copy
@@ -24,6 +24,7 @@ import gobject
 import gtk
 gtk.gdk.threads_init()
 
+
 def init():
     """Called when the module is being imported."""
     notebook = EditorNotebook()
@@ -31,8 +32,10 @@ def init():
     # Plug callbacks into app.
     app.new_sound_loaded.connect(win.on_new_sound_loaded)
 
+
 def main_loop():
     gtk.main()
+
 
 def display_error(title, text, parent=None):
     d = gtk.MessageDialog(parent, type=gtk.MESSAGE_ERROR,
@@ -42,6 +45,7 @@ def display_error(title, text, parent=None):
     d.set_markup(text)
     d.run()
     d.destroy()
+
 
 class EditorWindow(gtk.Window):
 
@@ -78,7 +82,7 @@ class EditorWindow(gtk.Window):
         self.vbox.pack_start(self.toolbar, expand=False, fill=False)
         self.vbox.pack_start(self.notebook, expand=True, fill=True)
         self.add(self.vbox)
-        
+
         # Setup drag and drop
         TARGET_TYPE_TEXT = 80
         self.drag_dest_set(gtk.DEST_DEFAULT_ALL,
@@ -180,31 +184,31 @@ class EditorWindow(gtk.Window):
                    ('New', gtk.STOCK_NEW, None, None, '', self.new),
                    ('Open', gtk.STOCK_OPEN, None, None, '', self.open),
                    ('Save', gtk.STOCK_SAVE, None, None, '', self.save),
-                   ('Save as', gtk.STOCK_SAVE_AS, None, None, '',self.save_as),
-                   ('Save Selection as', gtk.STOCK_SAVE_AS,'Save Selection As',
-                                 '<Ctrl><Alt>s', None, self.save_selection_as),
+                   ('Save as', gtk.STOCK_SAVE_AS, None, None, '', self.save_as),
+                   ('Save Selection as', gtk.STOCK_SAVE_AS, 'Save Selection As',
+                    '<Ctrl><Alt>s', None, self.save_selection_as),
                    ('Close', gtk.STOCK_CLOSE, None, None, '', self.close),
                    ('Quit', gtk.STOCK_QUIT, None, None, '', self.quit),
                    ('Play', gtk.STOCK_MEDIA_PLAY, None, 'p', '', self.play),
                    ('Stop', gtk.STOCK_MEDIA_STOP, None, 'o', '', self.stop),
                    ('Start', gtk.STOCK_MEDIA_PREVIOUS, None, 'Home', '',
-                                                              self.goto_start),
+                    self.goto_start),
                    ('End', gtk.STOCK_MEDIA_NEXT, None, 'End', '',
-                                                                self.goto_end),
+                    self.goto_end),
                    ('Cut', gtk.STOCK_CUT, None, None, '', self.cut),
                    ('Copy', gtk.STOCK_COPY, None, None, '', self.copy),
                    ('Paste', gtk.STOCK_PASTE, None, None, '', self.paste),
                    ('Mix', gtk.STOCK_ADD, 'Mix', '<Ctrl><Shift>v', None,
-                                                                     self.mix),
+                    self.mix),
                    ('Undo', gtk.STOCK_UNDO, None, '<Ctrl>z', None, self.undo),
                    ('Redo', gtk.STOCK_REDO, None, '<Ctrl><Shift>z', None,
-                                                                    self.redo),
+                    self.redo),
                    ('SelectAll', gtk.STOCK_SELECT_ALL, None, '<Ctrl>a', '',
-                                                         self.select_all),
+                    self.select_all),
                    ('ZoomFit', gtk.STOCK_ZOOM_FIT, None, 'equal', '',
-                                                                self.zoom_fit),
+                    self.zoom_fit),
                    ('ZoomOut', gtk.STOCK_ZOOM_OUT, None, 'KP_Subtract', '',
-                                                                self.zoom_out),
+                    self.zoom_out),
                    ('ZoomIn', gtk.STOCK_ZOOM_IN, None, 'KP_Add', '',
                                                                  self.zoom_in),
                    ('About', gtk.STOCK_ABOUT, None, None, '', self.about)
@@ -248,6 +252,7 @@ class EditorWindow(gtk.Window):
 
     def busy(method):
         """A decorator to show a "busy" mouse cursor."""
+
         def decorated(self, *args):
             self.window.set_cursor(gtk.gdk.Cursor(gtk.gdk.WATCH))
             while gtk.events_pending():
@@ -277,6 +282,7 @@ class EditorWindow(gtk.Window):
                     "zoom_in", "zoom_out", "zoom_fit",
                     "select_till_start", "select_till_end"]:
             method = getattr(self.notebook, name)
+
             def forward(*args):
                 method(*args[1:])
             return forward
@@ -364,7 +370,7 @@ class EditorNotebook(gtk.Notebook):
                                          gobject.TYPE_NONE,
                                          (gobject.TYPE_PYOBJECT,)),
                     'error': (gobject.SIGNAL_RUN_LAST, gobject.TYPE_NONE,
-                              (gobject.TYPE_PYOBJECT,gobject.TYPE_PYOBJECT))}
+                              (gobject.TYPE_PYOBJECT, gobject.TYPE_PYOBJECT))}
 
     def __init__(self):
         gtk.Notebook.__init__(self)
@@ -476,12 +482,12 @@ class EditorNotebook(gtk.Notebook):
 class EditorPage(gtk.VBox):
 
     __gsignals__ = {'filename-changed': (gobject.SIGNAL_RUN_LAST,
-                                        gobject.TYPE_NONE,
+                                         gobject.TYPE_NONE,
                                          (gobject.TYPE_PYOBJECT,)),
                     'must-close': (gobject.SIGNAL_RUN_LAST, gobject.TYPE_NONE,
                                    ()),
                     'error': (gobject.SIGNAL_RUN_LAST, gobject.TYPE_NONE,
-                              (gobject.TYPE_PYOBJECT,gobject.TYPE_PYOBJECT))}
+                              (gobject.TYPE_PYOBJECT, gobject.TYPE_PYOBJECT))}
 
     def __init__(self, editor, graph, selection, cursor):
         gtk.VBox.__init__(self)
@@ -510,14 +516,15 @@ class EditorPage(gtk.VBox):
         # Popup menu page title
         self.menu_title = gtk.Label()
 
-        self.waveform = GraphView(graph, selection, cursor)
-        self.scrollbar = GraphScrollbar(graph)
+        # Timeline view: the main editor content
+        self.timeline = timeline.View(graph, selection, cursor)
+        self.pack_start(self.timeline, expand=True, fill=True)
+        self.timeline.connect("selection-changed",
+                              self.on_selection_changed)
+
         self.statusbar = gtk.Statusbar()
-        self.pack_start(self.waveform, expand=True, fill=True)
-        self.pack_start(self.scrollbar, expand=False, fill=False)
         self.pack_end(self.statusbar, expand=False, fill=False)
-        self.waveform.connect("selection-changed",
-                                              self.on_selection_changed)
+
         self.ctrl.filename_changed.connect(self._update_filename)
         self.ctrl.error.connect(self.emit_error)
         self.connect("destroy", self.on_destroy)
@@ -556,6 +563,7 @@ class EditorPage(gtk.VBox):
                     "effect", "open", "save_as", "save_selection_as",
                     "filename", "on_selection_changed"]:
             method = getattr(self.ctrl, name)
+
             def forward(*args):
                 return method(*args)
             return forward
@@ -563,12 +571,11 @@ class EditorPage(gtk.VBox):
             raise AttributeError(name)
 
 
-
 # -- Tests
-           
+
 def test():
     from gum.lib.mock import Fake, Mock
-    graph = Mock({"frames_info":(0, 0, [], []),
+    graph = Mock({"frames_info": (0, 0, [], []),
                   "channels": [[(0, 0.5)]],
                   "set_width": None,
                   "scroll_left": None,
@@ -581,6 +588,7 @@ def test():
     selection.changed = Fake()
     cursor = Mock({'pixel': 20})
     cursor.changed = Fake()
+
     class FakeEditor(Fake):
         def __init__(self):
             self.filename_changed = Fake()
@@ -595,6 +603,7 @@ def test():
     gtk.main()
 
     display_error("Title", "Text")
+
 
 if __name__ == '__main__':
     test()
